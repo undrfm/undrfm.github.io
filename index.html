@@ -605,7 +605,7 @@ body.icon-beat .vote-btn:not(.voted) svg, body.icon-beat .qi-stash-btn:not(.save
 }
 </style>
 
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js" integrity="sha384-PMNj1TmCgXfW24/rfIyxYSAWwj2mffkMfguUWv08iNFcy0kTC0JN7E/tE+pJ7+fa" crossorigin="anonymous"></script>
 <script>
 
 // Global YT variables — must exist before callback fires
@@ -809,10 +809,11 @@ function loadCrewHistory() {
 }
 
 // ── ACCESSO PERSISTENTE: riaggancio automatico all'ultima crew ──
-function _saveLastSession(code, pwd, role) {
-  try { localStorage.setItem('undr-last-session', JSON.stringify({ code, pwd: pwd || '', role, ts: Date.now() })); } catch(e) {}
+// ── SECURITY: si salva l'HASH della password, mai il testo in chiaro
+function _saveLastSession(code, pwdHash, role) {
+  try { localStorage.setItem('undr-last-session', JSON.stringify({ code, pwdHash: pwdHash || '', role, ts: Date.now() })); } catch(e) {}
 }
-function _autoRejoin() {
+async function _autoRejoin() {
   try {
     const raw = localStorage.getItem('undr-last-session');
     if (!raw) return;
@@ -822,11 +823,12 @@ function _autoRejoin() {
     if (!document.getElementById('screen-landing')?.classList.contains('active')) return;
     const alias = (localStorage.getItem('undr-alias') || '').trim();
     if (!alias || !validateAlias(alias).ok) return; // senza alias valido serve la landing
+    // hash password: nuovo formato (pwdHash); migrazione dal vecchio formato in chiaro (pwd)
+    let preHash = (typeof s.pwdHash === 'string') ? s.pwdHash : (s.pwd ? await hashPassword(s.pwd) : '');
     const u = document.getElementById('username-input'); if (u) u.value = alias;
     const c = document.getElementById('room-code-input'); if (c) c.value = s.code;
-    const p = document.getElementById('join-password-input'); if (p) p.value = s.pwd || '';
     toast('riaggancio a ' + s.code + '…');
-    if (s.role === 'host') createRoom(); else joinRoom();
+    if (s.role === 'host') createRoom(preHash); else joinRoom(preHash);
   } catch(e) {}
 }
 // esci davvero: dimentica la sessione e torna alla landing
@@ -1305,7 +1307,7 @@ function _submitGuard() {
   return true;
 }
 
-async function createRoom() {
+async function createRoom(preHash) {
   if (!_submitGuard()) return;
   const rawName = document.getElementById('username-input').value.trim();
   const aliasCheck = validateAlias(rawName);
@@ -1318,7 +1320,8 @@ async function createRoom() {
   toast('apertura crew...');
   const pwdEl = document.getElementById('join-password-input');
   const pwd = pwdEl ? pwdEl.value : '';
-  const pwdHash = await hashPassword(pwd);
+  // riaggancio: usa l'hash salvato; ingresso manuale: calcola dall'input
+  const pwdHash = (typeof preHash === 'string') ? preHash : await hashPassword(pwd);
   // ID stanza indipendente dalla password: la verifica la fa l'host sull'HELLO
   const hashedId = await hashCode(roomCode);
   crewPasswordHash = pwdHash;
@@ -1329,10 +1332,10 @@ async function createRoom() {
   myPeerId = 'host-' + hashedId.slice(0, 8);
   peers[myPeerId] = { name: myName, color: randomColor() };
   showRoom();
-  const pwdNote = pwd ? ' ·  protetta' : '';
+  const pwdNote = pwdHash ? ' ·  protetta' : '';
   toast('crew aperta · codice: ' + roomCode + pwdNote);
-  saveCrewToHistory(roomCode, !!pwd, 'host');
-  _saveLastSession(roomCode, pwd, 'host');
+  saveCrewToHistory(roomCode, !!pwdHash, 'host');
+  _saveLastSession(roomCode, pwdHash, 'host');
   restoreSavedQueue();
   // P2P in background
   try { if (peer) peer.destroy(); } catch(e) {}
@@ -1345,7 +1348,7 @@ async function createRoom() {
   });
 }
 
-async function joinRoom() {
+async function joinRoom(preHash) {
   if (!_submitGuard()) return;
   const rawName = document.getElementById('username-input').value.trim();
   const aliasCheck = validateAlias(rawName);
@@ -1357,7 +1360,8 @@ async function joinRoom() {
   roomCode = code;
   isHost = false;
   const pwd = document.getElementById('join-password-input').value;
-  const pwdHash = await hashPassword(pwd);
+  // riaggancio: usa l'hash salvato; ingresso manuale: calcola dall'input
+  const pwdHash = (typeof preHash === 'string') ? preHash : await hashPassword(pwd);
   crewPasswordHash = pwdHash;
   // ID stanza indipendente dalla password: con qualcuno online la verifica
   // la fa chi accoglie via P2P (HELLO → PWD_REJECTED se sbagliata)
@@ -1373,8 +1377,8 @@ async function joinRoom() {
   }
 
   // ── STEP 1: Enter room immediately — no host required ──
-  saveCrewToHistory(roomCode, !!pwd, 'join');
-  _saveLastSession(roomCode, pwd, 'join');
+  saveCrewToHistory(roomCode, !!pwdHash, 'join');
+  _saveLastSession(roomCode, pwdHash, 'join');
   showRoom();
   await restoreSavedQueue(); // load from GitHub or sessionStorage
 
@@ -5433,9 +5437,12 @@ function fmToggleBandCard() {
   var s = queue[currentIdx]; if (!s) return;
   var b = s.fmBand || {};
   var links = b.links || {};
-  var lk = Object.keys(links).filter(function(k) { return links[k]; }).map(function(k) {
-    return '<a href="' + escHtml(String(links[k])) + '" target="_blank" rel="noopener">' + escHtml(k) + '</a>';
-  }).join(' · ');
+  var lk = Object.keys(links).map(function(k) {
+    // ── SECURITY: solo http/https — blocca javascript:, data:, ecc. (dato remoto dalla band)
+    var href = String(links[k] || '').trim();
+    if (!/^https?:\/\//i.test(href)) return '';
+    return '<a href="' + escHtml(href) + '" target="_blank" rel="noopener noreferrer">' + escHtml(k) + '</a>';
+  }).filter(Boolean).join(' · ');
   card.innerHTML = '<p style="color:var(--accent);font-size:13px;">' + escHtml(b.name || s.author || '') + '</p>'
     + (b.city ? '<p>' + escHtml(b.city + (b.country && b.country !== 'IT' ? ' · ' + b.country : '')) + '</p>' : '')
     + (b.bio ? '<p>' + escHtml(b.bio) + '</p>' : '')

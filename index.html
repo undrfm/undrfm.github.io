@@ -839,13 +839,41 @@ function _persistDel(key) {
 }
 function _saveLastSession(code, pwdHash, role) {
   _persistSet('undr-last-session', JSON.stringify({ code, pwdHash: pwdHash || '', role, ts: Date.now() }));
+  // TERZA rete: il codice crew finisce nell'INDIRIZZO dell'app. Se il telefono cancella
+  // memoria e cookie, l'icona in home continua a sapere qual è la tua crew.
+  try { history.replaceState(null, '', location.pathname + '?c=' + encodeURIComponent(code)); } catch(e) {}
+}
+// Crew scritta nell'indirizzo (?c=CODICE), usata quando non è rimasto nient'altro
+function _crewFromUrl() {
+  try {
+    var m = (location.search || '').match(/[?&]c=([A-Za-z0-9_-]{2,12})/);
+    return m ? decodeURIComponent(m[1]).toUpperCase() : '';
+  } catch(e) { return ''; }
 }
 var _autoRejoinDone = false;
 async function _autoRejoin() {
   try {
     if (_autoRejoinDone) return;
     const raw = _persistGet('undr-last-session');   // memoria o cookie, quello che è sopravvissuto
-    if (!raw) return;
+    if (!raw) {
+      // Niente memoria e niente cookie (il telefono ha ripulito tutto): resta l'indirizzo.
+      // Almeno il codice crew lo recuperiamo, così devi rimettere solo la password —
+      // e se la crew non è protetta si entra lo stesso da soli.
+      const urlCode = _crewFromUrl();
+      if (!urlCode) return;
+      if (!document.getElementById('screen-landing')?.classList.contains('active')) return;
+      const cEl = document.getElementById('room-code-input'); if (cEl) cEl.value = urlCode;
+      const info = await ghGetCrew(urlCode);
+      if (info && info.protected === false) {
+        let al = (_persistGet('undr-alias') || '').trim();
+        if (!al || !validateAlias(al).ok) al = suggestAlias();
+        const uEl = document.getElementById('username-input'); if (uEl) { uEl.value = al; uEl.dataset.auto = ''; }
+        _autoRejoinDone = true;
+        toast('riaggancio a ' + urlCode + '…');
+        joinRoom('', true);
+      }
+      return;
+    }
     const s = JSON.parse(raw);
     if (!s || !s.code) return;
     // solo se siamo ancora sulla landing (non interferire se già in stanza)
@@ -3956,7 +3984,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Rete di sicurezza: se dopo 2.5s siamo ancora sulla landing con una sessione salvata, riprova.
   setTimeout(function() {
     try {
-      if (!_persistGet('undr-last-session')) return;
+      if (!_persistGet('undr-last-session') && !_crewFromUrl()) return;
       if (!document.getElementById('screen-landing')?.classList.contains('active')) return;
       _autoRejoinDone = false; // il primo tentativo non è andato a buon fine: riprova davvero
       _autoRejoin();

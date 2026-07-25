@@ -4413,6 +4413,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Salva crew info quando si entra
     var origJoinRoom = window.joinRoom;
     if (origJoinRoom) {
+      // NB: gli argomenti vanno INOLTRATI (preHash, isAuto). Senza, il rientro
+      // automatico perdeva la password salvata e finiva su "password errata".
       window.joinRoom = async function() {
         var code = (document.getElementById('room-code-input') || {}).value || '';
         var alias = (document.getElementById('username-input') || {}).value || '';
@@ -4428,7 +4430,7 @@ document.addEventListener('DOMContentLoaded', function() {
             localStorage.setItem('undr-crew-history', JSON.stringify(hist));
           } catch(e) {}
         }
-        await origJoinRoom();
+        await origJoinRoom.apply(this, arguments);
       };
     }
   }, 300);

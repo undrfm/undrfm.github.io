@@ -3875,8 +3875,12 @@ self.addEventListener('fetch', e => {
 });
     `;
     const swBlob = new Blob([swCode], { type: 'application/javascript' });
-    const swUrl = URL.createObjectURL(swBlob);
-    navigator.serviceWorker.register(swUrl, { scope: './' }).catch(() => {});
+    // iOS/Safari può rifiutare un service worker da blob: anche in modo sincrono →
+    // senza questo try l'errore fermerebbe il resto dell'inizializzazione.
+    try {
+      const swUrl = URL.createObjectURL(swBlob);
+      navigator.serviceWorker.register(swUrl, { scope: './' }).catch(() => {});
+    } catch(e) {}
   }
 
   // Lazy load fonts after app init (reduces cold IP leak to Google)
@@ -3909,9 +3913,20 @@ self.addEventListener('fetch', e => {
 
 // share room code on click + PWA init
 document.addEventListener('DOMContentLoaded', () => {
-  initPWA();
-  // Accesso persistente: rientra da solo nell'ultima crew (se salvata)
+  // ── ACCESSO PERSISTENTE PRIMA DI TUTTO ──
+  // Va programmato PRIMA di initPWA: su iOS/Safari initPWA può fallire (es. service worker
+  // da blob non ammesso) e, se lanciasse un'eccezione, tutto il resto del blocco — riaggancio
+  // compreso — non verrebbe mai eseguito → ogni volta credenziali a mano.
   setTimeout(_autoRejoin, 400);
+  // Rete di sicurezza: se dopo 2.5s siamo ancora sulla landing con una sessione salvata, riprova.
+  setTimeout(function() {
+    try {
+      if (!localStorage.getItem('undr-last-session')) return;
+      if (!document.getElementById('screen-landing')?.classList.contains('active')) return;
+      _autoRejoin();
+    } catch(e) {}
+  }, 2500);
+  try { initPWA(); } catch(e) {}
   document.getElementById('room-code-display').addEventListener('click', () => {
     navigator.clipboard?.writeText(roomCode).then(() => toast('codice copiato'));
   });

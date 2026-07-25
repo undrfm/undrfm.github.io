@@ -4775,15 +4775,16 @@ function toggleCrewPanel() {  var panel = document.getElementById('chat-crew-pan
 (function() {
 
   // ── INTRO "IL SEGNALE PIRATA": TV in B/N → glitch → SEGNALE INTERCETTATO → landing ──
-  // Parte a OGNI AVVIO dell'app (scelta utente 17/07), tap per saltarla.
-  // Non si ripete sui semplici reload della stessa sessione (flag in sessionStorage).
-  // Il riaggancio automatico alla crew continua a girare sotto: quando l'intro finisce, sei già dentro.
+  // Scelta utente 17/07: si vede la PRIMA volta (nessuna crew salvata). Una volta entrato,
+  // l'accesso resta salvato → ai rientri successivi niente intro, dritto alla playlist.
+  // Torna a mostrarsi se esci davvero dalla crew (⏏ CAMBIA CREW) o su un dispositivo nuovo.
   function runBoot() {
     var bs = document.getElementById('boot-screen');
     if (!bs) return;
-    var seen = false;
+    var seen = false, hasSession = false;
     try { seen = !!sessionStorage.getItem('undr-booted'); } catch(e) {}
-    if (seen) { bs.remove(); return; }
+    try { hasSession = !!localStorage.getItem('undr-last-session'); } catch(e) {}
+    if (seen || hasSession) { bs.remove(); return; }
     var timers = [], intervals = [], done = false;
     function T(fn, ms) { timers.push(setTimeout(fn, ms)); }
     function el(tag, css, html) { var e = document.createElement(tag); if (css) e.style.cssText = css; if (html !== undefined) e.innerHTML = html; return e; }

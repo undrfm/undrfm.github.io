@@ -810,30 +810,63 @@ function loadCrewHistory() {
 
 // ── ACCESSO PERSISTENTE: riaggancio automatico all'ultima crew ──
 // ── SECURITY: si salva l'HASH della password, mai il testo in chiaro
-function _saveLastSession(code, pwdHash, role) {
-  try { localStorage.setItem('undr-last-session', JSON.stringify({ code, pwdHash: pwdHash || '', role, ts: Date.now() })); } catch(e) {}
+// Doppia sicurezza: localStorage + cookie (1 anno). Su iOS/Safari capita che la
+// memoria del sito venga svuotata tra un'apertura e l'altra: se una sparisce, l'altra regge.
+function _persistSet(key, value) {
+  try { localStorage.setItem(key, value); } catch(e) {}
+  try {
+    var sec = (location.protocol === 'https:') ? '; Secure' : '';
+    document.cookie = key + '=' + encodeURIComponent(value) + '; max-age=31536000; path=/; SameSite=Lax' + sec;
+  } catch(e) {}
 }
+function _persistGet(key) {
+  var v = null;
+  try { v = localStorage.getItem(key); } catch(e) {}
+  if (v) return v;
+  try {
+    var m = document.cookie.match('(?:^|; )' + key.replace(/[-.]/g, '\\$&') + '=([^;]*)');
+    if (m) {
+      v = decodeURIComponent(m[1]);
+      try { localStorage.setItem(key, v); } catch(e) {} // ripristina la copia principale
+      return v;
+    }
+  } catch(e) {}
+  return null;
+}
+function _persistDel(key) {
+  try { localStorage.removeItem(key); } catch(e) {}
+  try { document.cookie = key + '=; max-age=0; path=/'; } catch(e) {}
+}
+function _saveLastSession(code, pwdHash, role) {
+  _persistSet('undr-last-session', JSON.stringify({ code, pwdHash: pwdHash || '', role, ts: Date.now() }));
+}
+var _autoRejoinDone = false;
 async function _autoRejoin() {
   try {
-    const raw = localStorage.getItem('undr-last-session');
+    if (_autoRejoinDone) return;
+    const raw = _persistGet('undr-last-session');   // memoria o cookie, quello che è sopravvissuto
     if (!raw) return;
     const s = JSON.parse(raw);
     if (!s || !s.code) return;
     // solo se siamo ancora sulla landing (non interferire se già in stanza)
     if (!document.getElementById('screen-landing')?.classList.contains('active')) return;
-    const alias = (localStorage.getItem('undr-alias') || '').trim();
-    if (!alias || !validateAlias(alias).ok) return; // senza alias valido serve la landing
+    // alias: se manca o non è più valido si rientra lo stesso con uno generato,
+    // NON si abbandona il riaggancio (era un vicolo cieco silenzioso)
+    let alias = (_persistGet('undr-alias') || '').trim();
+    if (!alias || !validateAlias(alias).ok) alias = suggestAlias();
     // hash password: nuovo formato (pwdHash); migrazione dal vecchio formato in chiaro (pwd)
     let preHash = (typeof s.pwdHash === 'string') ? s.pwdHash : (s.pwd ? await hashPassword(s.pwd) : '');
-    const u = document.getElementById('username-input'); if (u) u.value = alias;
+    const u = document.getElementById('username-input'); if (u) { u.value = alias; u.dataset.auto = ''; }
     const c = document.getElementById('room-code-input'); if (c) c.value = s.code;
+    _autoRejoinDone = true;
     toast('riaggancio a ' + s.code + '…');
-    if (s.role === 'host') createRoom(preHash); else joinRoom(preHash);
+    if (s.role === 'host') createRoom(preHash, true); else joinRoom(preHash, true);
   } catch(e) {}
 }
-// esci davvero: dimentica la sessione e torna alla landing
+// esci davvero (LOGOUT): dimentica la sessione — solo qui la password verrà richiesta di nuovo
 function leaveCrewForGood() {
-  try { localStorage.removeItem('undr-last-session'); } catch(e) {}
+  _persistDel('undr-last-session');
+  _autoRejoinDone = false;
   location.reload(); // beforeunload salva la coda; al reload si resta sulla landing
 }
 
@@ -1307,13 +1340,13 @@ function _submitGuard() {
   return true;
 }
 
-async function createRoom(preHash) {
+async function createRoom(preHash, isAuto) {
   if (!_submitGuard()) return;
   const rawName = document.getElementById('username-input').value.trim();
   const aliasCheck = validateAlias(rawName);
   if (!aliasCheck.ok) { showAliasError(aliasCheck.reason); return; }
   myName = escHtml(rawName.slice(0,30));
-  try { localStorage.setItem('undr-alias', rawName.trim()); } catch(e) {}
+  _persistSet('undr-alias', rawName.trim());
   const customCode = document.getElementById('room-code-input')?.value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,10);
   roomCode = (customCode && customCode.length >= 2) ? customCode : randomCode();
   isHost = true;
@@ -1348,13 +1381,13 @@ async function createRoom(preHash) {
   });
 }
 
-async function joinRoom(preHash) {
+async function joinRoom(preHash, isAuto) {
   if (!_submitGuard()) return;
   const rawName = document.getElementById('username-input').value.trim();
   const aliasCheck = validateAlias(rawName);
   if (!aliasCheck.ok) { showAliasError(aliasCheck.reason); return; }
   myName = escHtml(rawName.slice(0,30));
-  try { localStorage.setItem('undr-alias', rawName.trim()); } catch(e) {}
+  _persistSet('undr-alias', rawName.trim());
   const code = document.getElementById('room-code-input').value.trim().toUpperCase();
   if (!code || code.length < 3) { toast('inserisci un codice crew valido'); return; }
   roomCode = code;
@@ -1369,7 +1402,9 @@ async function joinRoom(preHash) {
 
   // Check password anche dal cloud — copre il caso "nessuno della crew online".
   // La verifica avviene LATO SERVER (RPC): l'hash salvato non lascia mai il database.
-  const pwdOk = await ghCheckPwd(roomCode, pwdHash);
+  // Nel RIENTRO AUTOMATICO non si abbandona mai: quell'accesso era già stato validato,
+  // quindi si prosegue e la verifica definitiva la fa chi accoglie via P2P (PWD_REJECTED).
+  const pwdOk = isAuto ? true : await ghCheckPwd(roomCode, pwdHash);
   if (!pwdOk) {
     toast('⚠ crew protetta — password errata o mancante');
     crewPasswordHash = '';
@@ -1503,7 +1538,7 @@ function _doLeave() {
   myName = ''; myPeerId = ''; roomCode = ''; isHost = false; videoOpen = false;
   // restore saved alias (don't reset to random)
   try {
-    const savedAlias = localStorage.getItem('undr-alias');
+    const savedAlias = _persistGet('undr-alias');
     const _uin = document.getElementById('username-input');
     if (savedAlias && validateAlias(savedAlias).ok) { _uin.value = savedAlias; _uin.dataset.auto = ''; }
     else { _uin.value = suggestAlias(); _uin.dataset.auto = '1'; }
@@ -3900,7 +3935,7 @@ self.addEventListener('fetch', e => {
 
   // Restore saved alias or suggest random
   try {
-    const savedAlias = localStorage.getItem('undr-alias');
+    const savedAlias = _persistGet('undr-alias');
     const _uin = document.getElementById('username-input');
     if (savedAlias && validateAlias(savedAlias).ok) { _uin.value = savedAlias; _uin.dataset.auto = ''; }
     else { _uin.value = suggestAlias(); _uin.dataset.auto = '1'; }
@@ -3921,8 +3956,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Rete di sicurezza: se dopo 2.5s siamo ancora sulla landing con una sessione salvata, riprova.
   setTimeout(function() {
     try {
-      if (!localStorage.getItem('undr-last-session')) return;
+      if (!_persistGet('undr-last-session')) return;
       if (!document.getElementById('screen-landing')?.classList.contains('active')) return;
+      _autoRejoinDone = false; // il primo tentativo non è andato a buon fine: riprova davvero
       _autoRejoin();
     } catch(e) {}
   }, 2500);
@@ -4798,7 +4834,7 @@ function toggleCrewPanel() {  var panel = document.getElementById('chat-crew-pan
     if (!bs) return;
     var seen = false, hasSession = false;
     try { seen = !!sessionStorage.getItem('undr-booted'); } catch(e) {}
-    try { hasSession = !!localStorage.getItem('undr-last-session'); } catch(e) {}
+    try { hasSession = !!_persistGet('undr-last-session'); } catch(e) {}
     if (seen || hasSession) { bs.remove(); return; }
     var timers = [], intervals = [], done = false;
     function T(fn, ms) { timers.push(setTimeout(fn, ms)); }
@@ -5135,7 +5171,7 @@ function saveAliasFromAccount() {
   var check = validateAlias(val);
   if (!check.ok) { toast('⚠ ' + check.reason); return; }
   myName = escHtml(val.slice(0, 30));
-  try { localStorage.setItem('undr-alias', val); } catch(e) {}
+  _persistSet('undr-alias', val);
   var uin = document.getElementById('username-input');
   if (uin) uin.value = val;
   if (myPeerId && peers[myPeerId]) peers[myPeerId].name = myName;

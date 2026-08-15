@@ -1638,18 +1638,29 @@ function sbHeaders() {
 
 // Accesso al cloud SOLO via funzioni RPC blindate (vedi supabase-hardening.sql):
 // la tabella non è leggibile/scrivibile direttamente e gli hash password non escono mai.
-async function ghGetCrew(code) {
+// 15/08/2026 — allineamento con la 2.0: il cloud consegna la coda di una crew
+// protetta solo a chi dimostra di conoscerne la password (supabase-coda-protetta.sql).
+// Qui si manda l'hash che abbiamo. Se sul cloud c'è ancora la funzione vecchia a
+// un solo parametro, PostgREST risponde 404 e si riprova alla vecchia maniera.
+async function ghGetCrew(code, hash) {
   if (!code) return null;
-  try {
+  const codice = code.toUpperCase();
+  const h = (typeof hash === 'string' ? hash : (crewPasswordHash || ''));
+  async function chiedi(corpo) {
     const resp = await fetch(SB_URL + '/rest/v1/rpc/undr_get_crew', {
       method: 'POST',
       headers: sbHeaders(),
-      body: JSON.stringify({ p_code: code.toUpperCase() }),
+      body: JSON.stringify(corpo),
       signal: AbortSignal.timeout(8000)
     });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    return data || null;
+    if (!resp.ok) return { errore: resp.status };
+    return { dati: await resp.json() };
+  }
+  try {
+    let r = await chiedi({ p_code: codice, p_hash: h });
+    if (r.errore === 404) r = await chiedi({ p_code: codice });
+    if (r.errore) return null;
+    return r.dati || null;
   } catch(e) { return null; }
 }
 

@@ -7147,11 +7147,18 @@ html.undr-ruota .screen { height: 100% !important; }
   function showStatic(ms) {
     var c = document.getElementById('tv-static');
     if (!c) return;
-    // disegna SOLO se il tab TV è davvero visibile: su tab nascosta è texture GPU sprecata
-    // (su driver Mali fragili contribuiva alla corruzione del rendering)
-    var tp = document.getElementById('tab-player');
-    if (!tp || !tp.classList.contains('active')) return;
+    // Disegna SOLO se il riquadro della TV si vede davvero: su una schermata
+    // nascosta sarebbe texture sprecata, e su certi driver Mali corrompeva il
+    // disegno — il motivo per cui il controllo c'era.
+    // Prima si guardava se la SCHEDA TV fosse quella "attiva". Sul telefono
+    // funziona, ma su PC la finestra e' larga e le tre colonne si vedono tutte
+    // insieme: la scheda attiva resta la CODA anche mentre guardi la TV, quindi
+    // la neve non usciva mai. Ora conta se il riquadro ha una dimensione a
+    // schermo, che e' vero in tutti e due i casi e falso quando e' nascosto.
     var host = c.parentElement;
+    if (!host) return;
+    var vista = host.getBoundingClientRect();
+    if (!vista.width || !vista.height) return;
     var w = (host && host.offsetWidth) || 320;
     var h = (host && host.offsetHeight) || 180;
     c.width = Math.max(40, Math.floor(w / 3));

@@ -7322,17 +7322,35 @@ body.tv-orizz #sfondo-tela { display: none !important; }
     var cv = el('canvas', 'position:absolute;inset:0;width:100%;height:100%;opacity:0;');
     bs.appendChild(cv);
     var nctx = cv.getContext('2d'), noiseOn = false;
+    // Due difetti che riempivano la memoria, misurati sul telefono:
+    //  1) createImageData veniva chiamata a OGNI fotogramma. La tela e' mezzo
+    //     schermo (540x1170 su un 1080x2340): 2,5 MB buttati via 60 volte al
+    //     secondo, 151 MB al secondo.
+    //  2) noise(true) veniva richiamata mentre la neve era gia' accesa, e ogni
+    //     chiamata faceva partire un ALTRO ciclo: cinque o sei che allocavano
+    //     insieme. Il processo che disegna la pagina saliva a 2 GB in 45
+    //     secondi, il sistema lo uccideva e l'app ripartiva dal login.
+    // Ora: una sola immagine riusata, e un solo ciclo alla volta.
+    var noiseImg = null, noiseAttivo = false;
     function noise(on) {
       noiseOn = on;
       cv.style.opacity = on ? '1' : '0';
       if (!on) return;
-      cv.width = Math.max(2, Math.floor(bs.clientWidth / 2));
-      cv.height = Math.max(2, Math.floor(bs.clientHeight / 2));
+      var L = Math.max(2, Math.floor(bs.clientWidth / 2));
+      var A = Math.max(2, Math.floor(bs.clientHeight / 2));
+      if (cv.width !== L || cv.height !== A || !noiseImg) {
+        cv.width = L; cv.height = A;
+        noiseImg = nctx.createImageData(L, A);
+        var d0 = noiseImg.data;
+        for (var k = 3; k < d0.length; k += 4) d0[k] = 255;   // opacita' una volta sola
+      }
+      if (noiseAttivo) return;      // un ciclo c'e' gia': non se ne avvia un altro
+      noiseAttivo = true;
       (function loop() {
-        if (!noiseOn || done) return;
-        var img = nctx.createImageData(cv.width, cv.height);
-        for (var i = 0; i < img.data.length; i += 4) { var v = Math.random() * 255 | 0; img.data[i] = v; img.data[i+1] = v; img.data[i+2] = v; img.data[i+3] = 255; }
-        nctx.putImageData(img, 0, 0);
+        if (!noiseOn || done) { noiseAttivo = false; return; }
+        var d = noiseImg.data;
+        for (var i = 0; i < d.length; i += 4) { var v = Math.random() * 255 | 0; d[i] = v; d[i+1] = v; d[i+2] = v; }
+        nctx.putImageData(noiseImg, 0, 0);
         requestAnimationFrame(loop);
       })();
     }

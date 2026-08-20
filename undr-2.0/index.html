@@ -1728,7 +1728,6 @@ function _doLeave() {
   stopProgress();
   document.getElementById('screen-room').classList.remove('active');
   document.getElementById('screen-landing').classList.add('active');
-  try { if (window.riavviaLogo) riavviaLogo(); } catch (e) {}   // il logo era fermo: si risveglia
   if (typeof _syncCrtOff === 'function') _syncCrtOff();
   const cb2 = document.getElementById('copyright-bar'); if (cb2) { cb2.style.display = 'none'; setTimeout(function(){ cb2.style.display='block'; cb2.style.opacity='0.6'; }, 4500); }
   document.getElementById('queue-list').innerHTML = '<p style="text-align:center; color:var(--muted); font-size:13px; padding:2rem;">' + (getLang().emptyQueue?.replace('·','<br>') || 'nessuna track in coda.<br>droppa qualcosa sotto.') + '</p>';
@@ -4803,25 +4802,15 @@ function startLandingAnimation() {
       if (cb) { cb.style.display = 'block'; cb.style.opacity = '0.6'; }
     }
 
-    // Le barre dell'equalizzatore vivono solo nella schermata iniziale. Fuori,
-    // il disegno si FERMA del tutto: prima continuava per sempre, un fotogramma
-    // ogni 900 ms, ridisegnando un canvas grande quanto lo schermo anche mentre
-    // eri in crew o in TV. In una sessione lunga erano decine di migliaia di
-    // timer e lavoro grafico continuo, per niente.
+    // le barre EQ restano vive finché siamo in landing; altrove il loop rallenta a check pigri
     if (document.getElementById('screen-landing')?.classList.contains('active')) {
       rafId = requestAnimationFrame(draw);
     } else {
-      rafId = null;   // si riparte da riavviaLogo() quando si torna alla landing
+      setTimeout(function(){ rafId = requestAnimationFrame(draw); }, 900);
     }
   }
 
   rafId = requestAnimationFrame(draw);
-  // rende il disegno riavviabile: serve quando si torna alla landing dopo
-  // essere usciti da una crew, visto che ora fuori si ferma davvero
-  window.riavviaLogo = function () {
-    if (rafId) return;
-    rafId = requestAnimationFrame(draw);
-  };
 }
 
 // ── TOKEN SYSTEM ──
@@ -5420,35 +5409,19 @@ html, body { background: #07060a; color: var(--text); }
 /* ── SFONDO IDENTICO A UNDR FOR CREATOR: aurora rotante + tre luci ── */
 body::before, body::after { display: none !important; }
 .screen::before, .screen::after { display: none !important; }
-/* ── SFONDO: STESSO ASPETTO, UNA FRAZIONE DEL LAVORO ──────────────────
-   Il disegno non cambia: cambia DOVE viene fatto il calcolo.
-   Una sfocatura costa in proporzione all'area su cui gira. Prima l'aurora
-   veniva sfocata di 110 px su 713x1543 px — sette volte lo schermo — e i tre
-   aloni di 85 px sulla loro intera superficie, tutto ricalcolato a ogni
-   fotogramma, per sempre. Su un telefono e' lavoro grafico continuo: scalda,
-   il telefono si difende rallentando, e con lui rallenta tutta l'app.
-
-   Ora ogni elemento viene disegnato piccolo, sfocato con un raggio ridotto
-   nella stessa proporzione, e poi INGRANDITO. Ingrandire e' gratis per la
-   scheda grafica, sfocare no. Aurora: un terzo (110/3 = 36,67 px, poi x3).
-   Aloni: meta' (85/2 = 42,5 px, poi x2). Posizioni ricalcolate per tenere
-   ogni centro esattamente dov'era.
-   Area sfocata: da 1.541k px a 232k px, SEI VOLTE E MEZZO in meno. */
 .aurora {
-  position: fixed; inset: 18.333%; z-index: 0; pointer-events: none; opacity: 0.15;
+  position: fixed; inset: -45%; z-index: 0; pointer-events: none; opacity: 0.15;
   background: conic-gradient(from 0deg, #c8f53a, #7b3af5, #3af5d0, #f53ab4, #f5a83a, #c8f53a);
-  filter: blur(36.67px); animation: aurora 9s linear infinite;   /* 9s: movimento vivo */
+  filter: blur(110px); animation: aurora 9s linear infinite;   /* era 22s: movimento più vivo */
 }
-/* l'ingrandimento fa parte dell'animazione, altrimenti la rotazione lo cancella */
-@keyframes aurora { from { transform: scale(3) rotate(0deg); } to { transform: scale(3) rotate(360deg); } }
-.blob { position: fixed; border-radius: 50%; filter: blur(42.5px); opacity: 0.45; pointer-events: none; z-index: 0; }
-.blob.lime   { width: 190px; height: 190px; background: #c8f53a; top: -15px; right: 15px; animation: undrDrift 10s infinite alternate ease-in-out; }
-.blob.violet { width: 220px; height: 220px; background: #7b3af5; bottom: 30px; left: -40px; animation: undrDrift 13s infinite alternate-reverse ease-in-out; }
-.blob.teal   { width: 160px; height: 160px; background: #3af5d0; top: calc(38% + 80px); left: calc(52% + 80px); opacity: 0.16; animation: undrDrift 16s infinite alternate ease-in-out; }
-/* lo scale(2) sta in fondo: cosi' viene applicato per primo e lo spostamento
-   di 34x44 px resta quello di prima invece di raddoppiare */
-@keyframes undrDrift { from { transform: translate(0,0) scale(1) scale(2); } to { transform: translate(34px,44px) scale(1.22) scale(2); } }
+@keyframes aurora { to { transform: rotate(360deg); } }
+.blob { position: fixed; border-radius: 50%; filter: blur(85px); opacity: 0.45; pointer-events: none; z-index: 0; }
+.blob.lime   { width: 380px; height: 380px; background: #c8f53a; top: -110px; right: -80px; animation: undrDrift 10s infinite alternate ease-in-out; }
+.blob.violet { width: 440px; height: 440px; background: #7b3af5; bottom: -80px; left: -150px; animation: undrDrift 13s infinite alternate-reverse ease-in-out; }
+.blob.teal   { width: 320px; height: 320px; background: #3af5d0; top: 38%; left: 52%; opacity: 0.16; animation: undrDrift 16s infinite alternate ease-in-out; }
+@keyframes undrDrift { from { transform: translate(0,0) scale(1); } to { transform: translate(50px,60px) scale(1.3); } }
 @media (prefers-reduced-motion: reduce) { .aurora, .blob { animation: none; } }
+@keyframes undrDrift { from { transform: translate(0,0) scale(1); } to { transform: translate(34px,44px) scale(1.22); } }
 @media (prefers-reduced-motion: reduce) { body::before, body::after { animation: none; } }
 /* le schermate devono essere TRASPARENTI, altrimenti coprono le luci */
 .screen { position: relative; z-index: 1; background: transparent !important; }
@@ -7681,7 +7654,6 @@ function exitFM() {
   _fmActive = false;
   document.getElementById('screen-fm').classList.remove('active');
   document.getElementById('screen-landing').classList.add('active');
-  try { if (window.riavviaLogo) riavviaLogo(); } catch (e) {}   // il logo era fermo: si risveglia
   document.body.classList.remove('crt-off'); // ripristina il velo CRT sulla landing
 }
 
@@ -8136,34 +8108,6 @@ function _diagTesto() {
     'timer di riserva : ' + (_autoNextWatchdog ? 'armato' : 'SPENTO'),
     'traccia          : ' + (currentIdx + 1) + ' di ' + queue.length,
     'loop: ' + _loopEnabled + '   casuale: ' + _shuffleEnabled,
-    '',
-    '── RETE FRA DISPOSITIVI ──',
-    'sono io l\'ospite : ' + (typeof isHost !== 'undefined' ? isHost : '?'),
-    'mio identificativo: ' + (typeof myPeerId !== 'undefined' ? myPeerId : '?'),
-    'ospite fidato    : ' + (typeof trustedHostPeer !== 'undefined' ? (trustedHostPeer || 'nessuno') : '?'),
-    'collegamenti     : ' + (function () {
-      try {
-        var k = Object.keys(connections);
-        if (!k.length) return 'NESSUNO';
-        return k.length + ' -> ' + k.map(function (x) {
-          return x.slice(-8) + (connections[x] && connections[x].open ? ' aperto' : ' CHIUSO');
-        }).join(', ');
-      } catch (e) { return '?'; }
-    })(),
-    'membri visti     : ' + (function () {
-      try {
-        var k = Object.keys(peers);
-        return k.length + ' -> ' + k.map(function (x) { return (peers[x].name || '?'); }).join(', ');
-      } catch (e) { return '?'; }
-    })(),
-    'ripetitore mio   : ' + (typeof relayPeer !== 'undefined' && relayPeer ? relayPeer.id : 'nessuno'),
-    'stato del peer   : ' + (function () {
-      try {
-        if (!peer) return 'non creato';
-        return (peer.destroyed ? 'DISTRUTTO' : (peer.disconnected ? 'SCOLLEGATO dal server' : 'connesso')) +
-               '  id ' + (peer.id || '?');
-      } catch (e) { return '?'; }
-    })(),
     'ORIENTAMENTO ora : ' + (typeof _orientStato !== 'undefined' ? _orientStato : '?'),
     'tipo schermo     : ' + ((window.screen && screen.orientation && screen.orientation.type) || '?'),
     '',

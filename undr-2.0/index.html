@@ -2343,7 +2343,6 @@ function nextTrack() {
 }
 
 function _avanzaTraccia() {
-  _ultimoAvanzamento = Date.now();
   clearTimeout(_autoNextWatchdog);
   _autoNextWatchdog = null;
   // BLOCCO A PROVA DI BOMBA: se l'utente ha messo in pausa, non avanzare MAI.
@@ -2374,6 +2373,11 @@ function _avanzaTraccia() {
   } else {
     return;
   }
+  // Il freno si arma SOLO quando si suona davvero. Prima veniva armato in
+  // cima: se la chiamata usciva subito (in pausa, coda vuota, fine coda), si
+  // bruciava la finestra di 1,5 s e la chiamata BUONA che arrivava dopo
+  // restava bloccata — niente traccia successiva e niente effetto neve.
+  _ultimoAvanzamento = Date.now();
   playTrack(currentIdx, true);
 }
 

@@ -608,6 +608,16 @@ body.icon-beat .vote-btn:not(.voted) svg, body.icon-beat .qi-stash-btn:not(.save
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js" integrity="sha384-PMNj1TmCgXfW24/rfIyxYSAWwj2mffkMfguUWv08iNFcy0kTC0JN7E/tE+pJ7+fa" crossorigin="anonymous"></script>
 <script>
 
+// Il canvas NON capisce le variabili CSS: passargli 'var(--accent)' fa
+// fallire addColorStop con un errore fatale che blocca tutto l'avvio.
+// Questa legge il valore vero del tema; se manca, torna al verde di serie.
+function _col(nome, ripiego) {
+  try {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(nome).trim();
+    return v || ripiego;
+  } catch (e) { return ripiego; }
+}
+
 // Global YT variables — must exist before callback fires
 var _ytPlayer = null;
 var _ytPlayerReady = false;
@@ -4103,7 +4113,7 @@ function generateIcon(size, radius) {
   ctx.fill();
   // subtle accent glow bottom
   const grd = ctx.createRadialGradient(size*0.5, size*0.85, 0, size*0.5, size*0.85, size*0.55);
-  grd.addColorStop(0, 'var(--accent-alone2, rgba(200,245,58,0.35))');
+  grd.addColorStop(0, _col('--accent-alone2', 'rgba(200,245,58,0.35)'));
   grd.addColorStop(1, 'transparent');
   ctx.fillStyle = grd;
   ctx.fillRect(0, 0, size, size);
@@ -4115,10 +4125,10 @@ function generateIcon(size, radius) {
   ctx.fillStyle = '#f0f0f0';
   ctx.fillText('UN', size * 0.5, size * 0.42);
   // DR in accent
-  ctx.fillStyle = 'var(--accent)';
+  ctx.fillStyle = _col('--accent', '#c8f53a');
   ctx.fillText('DR', size * 0.5, size * 0.72);
   // thin underline
-  ctx.fillStyle = 'var(--accent)';
+  ctx.fillStyle = _col('--accent', '#c8f53a');
   ctx.fillRect(size*0.25, size*0.88, size*0.5, size*0.025);
   return c;
 }
@@ -4332,7 +4342,7 @@ function startLandingAnimation() {
   var lockGap = FS * 0.26;
   var horizY = cy;
   var letters = ['U', 'N', 'D', 'R'];
-  var letterColor = ['#f0f0f0', '#f0f0f0', 'var(--accent)', 'var(--accent)'];
+  var letterColor = ['#f0f0f0', '#f0f0f0', _col('--accent', '#c8f53a'), _col('--accent', '#c8f53a')];
   var unW, drW, totalW, lockLeft, textLeft, letterW, letterX = [];
 
   // Le misure dipendono dal carattere: se Unbounded arriva dopo, si rifanno da sole
@@ -4404,7 +4414,7 @@ function startLandingAnimation() {
     var capH = FS * 0.87;   // TEMA C: barre alte quanto le lettere, come nel mockup
     var phases = [0, 0.9, 0.45, 1.6];
     var speeds = [1.0, 1.35, 0.8, 1.15];
-    ctx.fillStyle = 'var(--accent)';
+    ctx.fillStyle = _col('--accent', '#c8f53a');
     for (var b = 0; b < barN; b++) {
       var hh = capH * (0.22 + 0.78 * Math.abs(Math.sin(now / 1000 * speeds[b] * Math.PI + phases[b])));
       ctx.fillRect(lockLeft + b * (barW + barGap), horizY - hh, barW, hh);
@@ -4416,7 +4426,7 @@ function startLandingAnimation() {
     var wordGrad = ctx.createLinearGradient(textLeft, 0, textLeft + totalW, 0);
     wordGrad.addColorStop(0, '#f2eff9');
     wordGrad.addColorStop(0.42, '#f2eff9');
-    wordGrad.addColorStop(1, 'var(--accent)');
+    wordGrad.addColorStop(1, _col('--accent', '#c8f53a'));
     for (var i = 0; i < letters.length; i++) {
       ctx.fillStyle = wordGrad;
       ctx.fillText(letters[i], letterX[i], horizY);
@@ -4428,8 +4438,8 @@ function startLandingAnimation() {
       var lineFullW = totalW + barZone + lockGap; // dalla prima barra EQ fino alla fine di "UNDR"
       // TEMA C: riga che sfuma verso destra, come nel mockup
       var lineGrad = ctx.createLinearGradient(lockLeft, 0, lockLeft + lineFullW, 0);
-      lineGrad.addColorStop(0, 'var(--accent)');
-      lineGrad.addColorStop(1, 'var(--accent-alone2, rgba(200,245,58,0.35))');
+      lineGrad.addColorStop(0, _col('--accent', '#c8f53a'));
+      lineGrad.addColorStop(1, _col('--accent-alone2', 'rgba(200,245,58,0.35)'));
       ctx.fillStyle = lineGrad;
       ctx.fillRect(lockLeft, horizY + FS * 0.20, lerp(0, lineFullW, pLine), Math.max(2.5, FS*0.06));
     }

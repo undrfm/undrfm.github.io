@@ -3406,14 +3406,31 @@ function addSystemMsg(text) {
   }, AVVISO_DURATA);
 }
 
+// Mette in sicurezza un testo per l'HTML. E' IDEMPOTENTE: prima disfa le
+// entita' gia' presenti, poi protegge una volta sola. Serve perche' lo stesso
+// testo passa di qui piu' volte — sanitizeSong all'arrivo via P2P, di nuovo al
+// ripristino dalla copia salvata, e i nomi in chat a ogni rimbalzo nella rete.
+// Proteggendo due volte l'apostrofo di "L'enfant sauvage" diventava &amp;#39; e
+// si leggeva a schermo come L&#39;enfant sauvage.
+// Resta sicuro: la protezione viene applicata DOPO, quindi nessun < > " ' &
+// puo' sopravvivere in chiaro.
 function escHtml(s) {
   if (typeof s !== 'string') s = String(s || '');
+  s = unescHtml(s);
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
-// inverso di escHtml: ridà i caratteri reali da entità HTML (', ", &, <, >)
+// Inverso di escHtml: rida' i caratteri reali (', ", &, <, >). Ripete finche'
+// il testo non cambia piu', cosi' guarisce anche quello protetto piu' volte
+// dalle versioni precedenti (&amp;amp;#39; e simili).
 function unescHtml(s) {
   if (typeof s !== 'string') s = String(s || '');
-  return s.replace(/&#0*39;/g, "'").replace(/&#x27;/gi, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  for (var giro = 0; giro < 5; giro++) {
+    var prima = s;
+    s = s.replace(/&#0*39;/g, "'").replace(/&#x27;/gi, "'").replace(/&quot;/g, '"')
+         .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    if (s === prima) break;
+  }
+  return s;
 }
 
 // ── Titoli puliti: via "(Official Video)", "[4K Remaster]" ecc. e artista duplicato ──

@@ -3654,6 +3654,129 @@ function adattaCodiceCrew() {
   } catch (e) {}
 }
 window.addEventListener('resize', function () { setTimeout(adattaCodiceCrew, 60); });
+
+// ═════ SFONDO: STESSO DISEGNO, UNA SOLA TELA ═══════════════════════
+// Le quattro figure vengono sfocate UNA VOLTA in altrettante immagini, poi
+// disegnate su una tela grande quanto lo schermo. Prima erano quattro livelli
+// separati, ognuno con la sua texture: 294 MB di memoria video sul telefono,
+// che e' il motivo per cui il sistema uccideva l'app e ripartiva dal login.
+function _avviaSfondoTela() {
+  var tela = document.getElementById('sfondo-tela');
+  if (!tela || !tela.getContext) return;
+  var ctx = tela.getContext('2d');
+  var W = 0, H = 0, dpr = 1;
+
+  // ── le immagini gia' sfocate ──
+  function sfocata(larg, alt, raggio, disegna) {
+    var c = document.createElement('canvas');
+    c.width = larg; c.height = alt;
+    var x = c.getContext('2d');
+    if (typeof x.filter === 'string') x.filter = 'blur(' + raggio + 'px)';
+    disegna(x, larg, alt);
+    x.filter = 'none';
+    // La sfocatura CSS sfuma anche FUORI dall'elemento e il suo bordo non si
+    // vede mai; dentro un'immagine il bordo e' netto e ruotando entrava nello
+    // schermo come un taglio diagonale. Qui il bordo si sfuma a mano, con una
+    // sfumatura schiacciata sulla forma del riquadro (una tonda lascerebbe i
+    // lati corti ancora netti).
+    x.globalCompositeOperation = 'destination-in';
+    x.save();
+    x.translate(larg / 2, alt / 2);
+    x.scale(1, alt / larg);
+    var g = x.createRadialGradient(0, 0, 0, 0, 0, larg / 2);
+    g.addColorStop(0, 'rgba(0,0,0,1)');
+    g.addColorStop(0.45, 'rgba(0,0,0,1)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = g;
+    x.fillRect(-larg / 2, -larg / 2, larg, larg);
+    x.restore();
+    x.globalCompositeOperation = 'source-over';
+    return c;
+  }
+
+  function tondo(colore, frazione) {
+    return function (x, L, A) {
+      x.fillStyle = colore;
+      x.beginPath();
+      x.arc(L / 2, A / 2, L * frazione, 0, Math.PI * 2);
+      x.fill();
+    };
+  }
+
+  function conica(x, L, A) {
+    var g;
+    try { g = x.createConicGradient(0, L / 2, A / 2); }
+    catch (e) { g = x.createLinearGradient(0, 0, L, A); }
+    var fermate = [[0,'#c8f53a'],[0.2,'#7b3af5'],[0.4,'#3af5d0'],[0.6,'#f53ab4'],[0.8,'#f5a83a'],[1,'#c8f53a']];
+    for (var i = 0; i < fermate.length; i++) g.addColorStop(fermate[i][0], fermate[i][1]);
+    x.fillStyle = g;
+    x.fillRect(0, 0, L, A);
+  }
+
+  // Il cerchio pieno piu' la sfocatura si vede fin circa 3 volte il raggio di
+  // sfocatura oltre il bordo: 380 + 510 = 890, e cosi' per gli altri.
+  var imgAurora = sfocata(300, 620, 44, conica);
+  var imgLime   = sfocata(300, 300, 85 * 300 / 890, tondo('#c8f53a', 380 / 890 / 2));
+  var imgViola  = sfocata(300, 300, 85 * 300 / 950, tondo('#7b3af5', 440 / 950 / 2));
+  var imgTeal   = sfocata(300, 300, 85 * 300 / 830, tondo('#3af5d0', 320 / 830 / 2));
+
+  function misura() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    tela.width = Math.round(W * dpr);
+    tela.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  misura();
+  window.addEventListener('resize', function () { setTimeout(misura, 80); });
+
+  // alternate ease-in-out di CSS = un'oscillazione morbida di periodo doppio
+  function onda(t, periodo, alRovescio) {
+    var v = (1 - Math.cos(Math.PI * t / periodo)) / 2;
+    return alRovescio ? 1 - v : v;
+  }
+
+  var t0 = Date.now(), ultimo = 0;
+  function disegna() {
+    requestAnimationFrame(disegna);
+    if (document.hidden) return;               // schermo spento: niente lavoro
+    var ora = Date.now();
+    if (ora - ultimo < 33) return;             // 30 al secondo bastano: si muove piano
+    ultimo = ora;
+    var t = (ora - t0) / 1000;
+
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.save();
+    ctx.globalAlpha = 0.15;
+    ctx.translate(W / 2, H / 2);
+    ctx.rotate(t / 9 * Math.PI * 2);
+    ctx.drawImage(imgAurora, -W * 0.95, -H * 0.95, W * 1.9, H * 1.9);
+    ctx.restore();
+
+    alone(imgLime,  0.45, W - 110, 80,          890, 10, false, t);
+    alone(imgViola, 0.45, 70,      H - 140,     950, 13, true,  t);
+    alone(imgTeal,  0.16, W * 0.52 + 160, H * 0.38 + 160, 830, 16, false, t);
+  }
+
+  function alone(im, alfa, cx, cy, dim, periodo, alRovescio, t) {
+    var f = onda(t, periodo, alRovescio);
+    var d = dim * (1 + 0.22 * f);
+    ctx.save();
+    ctx.globalAlpha = alfa;
+    ctx.drawImage(im, cx + 34 * f - d / 2, cy + 44 * f - d / 2, d, d);
+    ctx.restore();
+  }
+
+  requestAnimationFrame(disegna);
+}
+// Questo blocco vive nello script che sta PRIMA del corpo della pagina:
+// all'esecuzione la tela non esiste ancora, quindi si aspetta che ci sia.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _avviaSfondoTela);
+} else {
+  _avviaSfondoTela();
+}
 // ── SECURITY: sanitize color to safe hex only ──
 function sanitizeColor(c) {
   if (typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c)) return c;
@@ -6609,6 +6732,30 @@ html.undr-ruota .screen { height: 100% !important; }
    sensazione di "lunghissimo e tagliato".
    Qui lo riporto sopra il campo "incolla o cerca", con la stessa larghezza:
    la colonna della coda e' minmax(340px, 430px) e il campo dentro misura 397. */
+
+/* ── SFONDO SU UNA SOLA TELA ─────────────────────────────────
+   Il disegno non cambia. Cambia quanta memoria video serve per tenerlo.
+   Misurato sul telefono (Redmi Note 8 Pro, 1080x2340 a densita' 2,75):
+   l'app ferma sulla schermata di login teneva 294 MB di texture sulla GPU.
+   Un'app normale ne usa 20-50. Quando il sistema ha bisogno di memoria
+   uccide il processo e l'app riparte dal login: il blocco che si vedeva.
+
+   Il motivo e' l'AREA dei livelli animati, non la sfocatura in se': l'aurora
+   e' larga il 190% dello schermo, cioe' 2054x4447 pixel reali, 36 MB per un
+   solo buffer — e una sfocatura ne vuole diversi, moltiplicati per quattro
+   livelli. Prova A/B in Chrome sullo stesso telefono: pagina vuota 3 MB,
+   sfondo a quattro livelli 183 MB, sfondo su una tela sola 53 MB.
+
+   Qui i quattro livelli spariscono e restano come riferimento delle misure;
+   al loro posto UNA tela grande quanto lo schermo, su cui vengono disegnate
+   le stesse figure, gia' sfocate una volta sola all'avvio. */
+.aurora, .blob { display: none !important; }
+#sfondo-tela {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  z-index: 0; pointer-events: none; display: block;
+}
+/* in TV orizzontale spariva lo sfondo: stessa regola di prima */
+body.tv-orizz #sfondo-tela { display: none !important; }
 /* ── CODICE CREW LUNGO: LA PILLOLA "ONLINE" NON SI SPOSTA PIU' ──────────
    .room-code-wrap ha flex: 1, ma un elemento flessibile non si restringe
    sotto la larghezza del proprio contenuto: un codice lungo allargava il
@@ -6644,6 +6791,7 @@ html.undr-ruota .screen { height: 100% !important; }
 <body>
 
 <!-- sfondo del tema (identico a UNDR FOR CREATOR) -->
+<canvas id="sfondo-tela"></canvas>
 <div class="aurora"></div>
 <div class="blob lime"></div>
 <div class="blob violet"></div>

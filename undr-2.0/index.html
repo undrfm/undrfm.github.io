@@ -1682,6 +1682,7 @@ function showRoom() {
   const cb = document.getElementById('copyright-bar'); if (cb) cb.style.display = 'none';
   const lockIcon = crewPasswordHash ? ' ' : '';
   document.getElementById('room-code-display').textContent = roomCode + lockIcon; var ptc = document.getElementById('player-tb-crew-code'); if (ptc) ptc.textContent = roomCode + lockIcon;
+  setTimeout(adattaCodiceCrew, 30);   // codice lungo: rimpicciolisci finche' ci sta
   // Don't set peers[myPeerId] here — myPeerId not set yet for joinRoom
   // It gets set in peer.on('open')
   renderPeers();
@@ -3620,6 +3621,36 @@ function risolviArtista(s) {
     }).catch(function () {});
   } catch (e) {}
 }
+
+// Il codice crew puo' essere lungo (i codici generati sono di 8 caratteri, e
+// uno scelto a mano puo' arrivare a 10). Invece di imporre un limite — che
+// romperebbe i codici gia' in giro e ridurrebbe le combinazioni da 850
+// miliardi a 887 milioni — il carattere si rimpicciolisce quanto basta.
+// Si parte dalla misura piena e si scende di mezzo punto per volta, fino a un
+// minimo leggibile: cosi' un codice corto resta grande come prima.
+function adattaCodiceCrew() {
+  try {
+    var el = document.getElementById('room-code-display');
+    if (!el || !el.offsetParent) return;
+    // lo spazio vero e' quello di .room-code-wrap: il genitore immediato e' un
+    // contenitore senza classe che si allarga col testo e mentirebbe
+    var contenitore = el.closest('.room-code-wrap') || el.parentElement;
+    if (!contenitore) return;
+    var massimo = 19, minimo = 10;
+    // il tema impone font-size: 19px !important, e uno stile scritto da qui
+    // perderebbe: va messo con la stessa forza, altrimenti la misura non cambia
+    // e il codice resta tagliato invece di rimpicciolirsi
+    el.style.setProperty('font-size', massimo + 'px', 'important');
+    var spazio = contenitore.clientWidth;
+    if (!spazio) return;
+    var misura = massimo;
+    while (misura > minimo && el.scrollWidth > spazio) {
+      misura -= 0.5;
+      el.style.setProperty('font-size', misura + 'px', 'important');
+    }
+  } catch (e) {}
+}
+window.addEventListener('resize', function () { setTimeout(adattaCodiceCrew, 60); });
 // ── SECURITY: sanitize color to safe hex only ──
 function sanitizeColor(c) {
   if (typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c)) return c;
@@ -6567,6 +6598,26 @@ html.undr-ruota .screen { height: 100% !important; }
    sensazione di "lunghissimo e tagliato".
    Qui lo riporto sopra il campo "incolla o cerca", con la stessa larghezza:
    la colonna della coda e' minmax(340px, 430px) e il campo dentro misura 397. */
+/* ── CODICE CREW LUNGO: LA PILLOLA "ONLINE" NON SI SPOSTA PIU' ──────────
+   .room-code-wrap ha flex: 1, ma un elemento flessibile non si restringe
+   sotto la larghezza del proprio contenuto: un codice lungo allargava il
+   riquadro e spingeva via tutto il resto. Misurato su schermo da 375 px:
+   con "666" la pillola stava a 142, con un codice da 17 caratteri finiva a
+   305 e l'avatar usciva dallo schermo (396 su 375).
+   min-width: 0 toglie quel vincolo, cosi' il codice resta dentro la sua meta'
+   e la pillola non si muove piu'. Il carattere lo rimpicciolisce adattaCodiceCrew. */
+.room-code-wrap { min-width: 0 !important; }
+/* fra il codice e .room-code-wrap c'e' un contenitore senza classe che
+   si allargava col contenuto (285px invece dei 122 disponibili) e faceva
+   misurare male lo spazio: deve stringersi anche lui. */
+.room-code-wrap > * { min-width: 0 !important; max-width: 100% !important; }
+#room-code-display {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  display: block !important;
+}
+
 @media (min-width: 900px) {
   #toast {
     left: 16px !important;

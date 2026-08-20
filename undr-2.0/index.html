@@ -7155,7 +7155,7 @@ html.undr-ruota .screen { height: 100% !important; }
     c.style.display = 'block';
     var ctx = c.getContext('2d');
     var img = ctx.createImageData(c.width, c.height);
-    var stop = Date.now() + (ms || 420);
+    var stop = Date.now() + (ms || 700);
     (function frame() {
       var d = img.data;
       for (var p = 0; p < d.length; p += 4) {
@@ -7205,7 +7205,12 @@ html.undr-ruota .screen { height: 100% !important; }
     var origPlay = window.playTrack;
     if (origPlay) {
       window.playTrack = function(idx, autoplay) {
-        showStatic(420);
+        // 700 ms invece di 420: prima, a fine traccia, playTrack veniva
+        // chiamata tre o quattro volte di fila (il difetto del loop) e la
+        // neve ripartiva a ogni chiamata, risultando lunga e vistosa. Ora la
+        // chiamata e' una sola: allungo la singola raffica per ridare al
+        // cambio canale lo stesso peso di prima.
+        showStatic(700);
         if (window.__undrResetBgRetries) window.__undrResetBgRetries();
         var badge = document.getElementById('tv-source-badge');
         if (badge) badge.textContent = 'CH·' + String(((idx | 0) + 1)).padStart(2, '0');

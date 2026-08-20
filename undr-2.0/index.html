@@ -260,6 +260,9 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .msg-bubble.system { background: none; color: var(--muted2); font-size: 13px; font-style: italic; font-family: var(--mono); text-align: center; padding: 4px 0; border: none; }
 .token-toast-inner { display: inline-flex; align-items: center; gap: 5px; background: var(--accent-alone2, rgba(200,245,58,0.35)); border: 1px solid var(--accent-alone2, rgba(200,245,58,0.35)); border-radius: 20px; padding: 4px 10px; }
 .token-toast-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+/* il messaggio dei token entra e se ne va come gli avvisi di servizio */
+.token-toast { opacity: 1; transform: translateY(0); transition: opacity 0.55s ease, transform 0.55s ease; animation: avvisoEntra 0.28s ease-out; }
+.token-toast.via { opacity: 0; transform: translateY(6px); }
 .token-toast-txt { font-family: var(--mono); font-size: 11px; color: var(--accent-alone2, rgba(200,245,58,0.35)); }
 .chat-link { display: inline-block; margin: 4px 0 0; padding: 5px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; max-width: 100%; word-break: break-all; }
 .yt-link { background: var(--accent-alone2, rgba(200,245,58,0.35)); color: var(--accent); border: 1px solid var(--accent-alone2, rgba(200,245,58,0.35)); display: block; }
@@ -5078,9 +5081,17 @@ function earnToken(amount, reason) {
   if (msgs) {
     var d = document.createElement('div');
     d.style.alignSelf = 'center';
+    d.className = 'token-toast';
     d.innerHTML = '<div class="token-toast-inner"><div class="token-toast-dot"></div><div class="token-toast-txt">+' + amount + ' token · ' + reason + '</div></div>';
     msgs.appendChild(d);
     msgs.scrollTop = msgs.scrollHeight;
+    // A scomparsa come gli avvisi di servizio: prima restava per sempre nello
+    // storico della chat, e dopo un po' di token la conversazione era piena di
+    // queste pillole. Stessa durata e stessa dissolvenza degli altri avvisi.
+    setTimeout(function () {
+      d.classList.add('via');
+      setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 600);
+    }, AVVISO_DURATA);
   }
 }
 

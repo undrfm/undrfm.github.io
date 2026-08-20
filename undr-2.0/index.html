@@ -3697,13 +3697,39 @@ function _avviaSfondoTela() {
   var W = 0, H = 0, dpr = 1;
 
   // ── le immagini gia' sfocate ──
+  // Safari vecchio dichiara ctx.filter ma non lo applica: qui si verifica sul
+  // serio disegnando due pixel e guardando se sbavano. Se non sbavano, la
+  // sfocatura si ottiene disegnando piccolo e reingrandendo, che e' morbido
+  // ovunque. Gli aloni non passano piu' di qui: sono sfumature radiali.
+  var _filtroBuono = (function () {
+    try {
+      var t = document.createElement('canvas'); t.width = t.height = 9;
+      var q = t.getContext('2d');
+      q.filter = 'blur(2px)';
+      q.fillStyle = '#fff'; q.fillRect(4, 4, 1, 1);
+      q.filter = 'none';
+      return q.getImageData(2, 4, 1, 1).data[3] > 0;   // sbava fin qui?
+    } catch (e) { return false; }
+  }());
+
   function sfocata(larg, alt, raggio, disegna) {
     var c = document.createElement('canvas');
     c.width = larg; c.height = alt;
     var x = c.getContext('2d');
-    if (typeof x.filter === 'string') x.filter = 'blur(' + raggio + 'px)';
-    disegna(x, larg, alt);
-    x.filter = 'none';
+    if (raggio > 0 && !_filtroBuono) {
+      // niente sfocatura vera: disegno piccolo e reingrandisco
+      var f = Math.max(3, Math.round(larg / Math.max(2, raggio)));
+      var p = document.createElement('canvas');
+      p.width = Math.max(2, Math.round(larg / f));
+      p.height = Math.max(2, Math.round(alt / f));
+      disegna(p.getContext('2d'), p.width, p.height);
+      x.imageSmoothingEnabled = true;
+      x.drawImage(p, 0, 0, larg, alt);
+    } else {
+      if (raggio > 0) x.filter = 'blur(' + raggio + 'px)';
+      disegna(x, larg, alt);
+      x.filter = 'none';
+    }
     // La sfocatura CSS sfuma anche FUORI dall'elemento e il suo bordo non si
     // vede mai; dentro un'immagine il bordo e' netto e ruotando entrava nello
     // schermo come un taglio diagonale. Qui il bordo si sfuma a mano, con una
@@ -3724,13 +3750,38 @@ function _avviaSfondoTela() {
     return c;
   }
 
-  function tondo(colore, frazione) {
+  // Alone morbido SENZA sfocatura del canvas. Safari sulle versioni piu'
+  // vecchie ignora ctx.filter in silenzio: disegnava cerchi con il bordo duro,
+  // e sull'iPhone lo sfondo veniva fuori a dischi netti invece che sfumato.
+  // Una sfumatura radiale e' morbida per costruzione e funziona ovunque.
+  // I passaggi seguono il profilo vero di un cerchio sfocato: piatto al centro,
+  // poi una discesa a esse. R e' il raggio del cerchio, S quanto sfuma,
+  // tutt'e due in frazione della larghezza.
+  function tondo(colore, R_frazione, S_frazione) {
+    // canale alfa a esse: la stessa curva che darebbe una sfocatura gaussiana
+    function profilo(d) {
+      var t = (R_frazione - d) / (S_frazione * 1.4142);
+      // approssimazione della funzione errore, buona a sufficienza per un alone
+      var seg = t < 0 ? -1 : 1; t = Math.abs(t);
+      var a = 1 / (1 + 0.3275911 * t);
+      var e = 1 - (((((1.061405429 * a - 1.453152027) * a) + 1.421413741) * a - 0.284496736) * a + 0.254829592) * a * Math.exp(-t * t);
+      return (1 + seg * e) / 2;
+    }
     return function (x, L, A) {
-      x.fillStyle = colore;
-      x.beginPath();
-      x.arc(L / 2, A / 2, L * frazione, 0, Math.PI * 2);
-      x.fill();
+      var g = x.createRadialGradient(L / 2, A / 2, 0, L / 2, A / 2, L / 2);
+      for (var i = 0; i <= 24; i++) {
+        var p = i / 24;
+        var alfa = Math.max(0, Math.min(1, profilo(p / 2)));   // p/2: frazione del RAGGIO
+        g.addColorStop(p, 'rgba(' + _rgb(colore) + ',' + alfa.toFixed(3) + ')');
+      }
+      x.fillStyle = g;
+      x.fillRect(0, 0, L, A);
     };
+  }
+
+  function _rgb(hex) {
+    var n = parseInt(hex.slice(1), 16);
+    return ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255);
   }
 
   function conica(x, L, A) {
@@ -3746,9 +3797,11 @@ function _avviaSfondoTela() {
   // Il cerchio pieno piu' la sfocatura si vede fin circa 3 volte il raggio di
   // sfocatura oltre il bordo: 380 + 510 = 890, e cosi' per gli altri.
   var imgAurora = sfocata(300, 620, 44, conica);
-  var imgLime   = sfocata(300, 300, 85 * 300 / 890, tondo('#c8f53a', 380 / 890 / 2));
-  var imgViola  = sfocata(300, 300, 85 * 300 / 950, tondo('#7b3af5', 440 / 950 / 2));
-  var imgTeal   = sfocata(300, 300, 85 * 300 / 830, tondo('#3af5d0', 320 / 830 / 2));
+  // raggio del cerchio e ampiezza della sfumatura, in frazione del riquadro:
+  // 380 di cerchio e 85 di sfocatura su 890 di riquadro, e cosi' per gli altri
+  var imgLime   = sfocata(300, 300, 0, tondo('#c8f53a', 380 / 890 / 2, 85 / 890));
+  var imgViola  = sfocata(300, 300, 0, tondo('#7b3af5', 440 / 950 / 2, 85 / 950));
+  var imgTeal   = sfocata(300, 300, 0, tondo('#3af5d0', 320 / 830 / 2, 85 / 830));
 
   function misura() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);

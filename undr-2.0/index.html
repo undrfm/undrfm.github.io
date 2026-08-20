@@ -6845,43 +6845,6 @@ html.undr-ruota .screen { height: 100% !important; }
    risolvere la memoria video dell'ANDROID (294 MB, l'app veniva uccisa), un
    problema che su iPhone non si e' mai presentato. Il disegno e' lo stesso,
    cambia solo come viene messo insieme. */
-/* ── PROVA: iPHONE, LAYOUT FERMO IN ORIZZONTALE ────────────────────
-   Si accende SOLO aggiungendo ?fermo=1 all'indirizzo. L'app normale non e'
-   toccata: chi non mette quel pezzo vede tutto come adesso.
-
-   Su Android la finestra e' bloccata in verticale dal manifesto e girando il
-   telefono non succede niente. Su iPhone non c'e' modo di bloccarla: la pagina
-   ruota e le schermate si ridispongono.
-
-   Il tentativo precedente contro-ruotava il corpo della pagina, e su iOS questo
-   promuove tutto a un livello grafico unico: sfarfallio e blocco, lo stesso
-   guaio della tela. Qui NON si ruota e NON si trasforma niente: si tiene solo
-   la colonna della larghezza che avrebbe in verticale, cosi' il contenuto non
-   si ridispone. Nessun costo grafico aggiunto. */
-@media (orientation: landscape) {
-  /* Solo il CONTENUTO viene tenuto stretto. Intestazione e barra in basso
-     restano larghe: dandogli margine automatico si restringevano al proprio
-     contenuto (sono elementi di una colonna) e le scritte QUEUE/TV/CHAT
-     finivano una sull'altra. */
-  body.fermo-orizz .tab-content {
-    max-width: 100vh !important;
-    margin-left: auto !important; margin-right: auto !important;
-    width: 100% !important;
-  }
-  /* nella TV il video sfrutta tutto lo schermo, come deve */
-  body.fermo-orizz.fermo-tv .tab-content { max-width: none !important; }
-  body.fermo-orizz.fermo-tv #yt-iframe-wrap {
-    position: fixed !important; inset: 0 !important; z-index: 40 !important;
-    width: 100vw !important; height: 100vh !important;
-    transform: none !important; background: #000 !important;
-  }
-  body.fermo-orizz.fermo-tv .room-header,
-  body.fermo-orizz.fermo-tv .tabbar-bottom,
-  body.fermo-orizz.fermo-tv .tv-logo-row,
-  body.fermo-orizz.fermo-tv .tv-antennas,
-  body.fermo-orizz.fermo-tv .tv-ticker-row,
-  body.fermo-orizz.fermo-tv .tv-controls { display: none !important; }
-}
 body.sfondo-css .aurora, body.sfondo-css .blob { display: block !important; }
 body.sfondo-css #sfondo-tela { display: none !important; }
 #sfondo-tela {
@@ -8437,22 +8400,6 @@ function _inTv() {
   var st = document.getElementById('screen-room');
   return !!(tv && st && st.classList.contains('active') &&
             getComputedStyle(tv).display !== 'none');
-}
-// ═════ PROVA a richiesta: iPhone, layout fermo in orizzontale ═════════
-// Si accende solo con ?fermo=1 nell'indirizzo. Serve a provarla sul telefono
-// senza toccare l'app di tutti i giorni: se sfarfalla, basta togliere il pezzo
-// dall'indirizzo e tutto torna come prima.
-// Niente trasformazioni: il tentativo con la contro-rotazione del corpo della
-// pagina aveva riportato sfarfallio e blocco su iOS.
-var _fermoAcceso = /[?&]fermo=1/.test(location.search);
-if (_fermoAcceso) {
-  document.body.classList.add('fermo-orizz');
-  setInterval(function () {
-    var inTv = false;
-    try { inTv = _inTv(); } catch (e) {}
-    var b = document.body;
-    if (b.classList.contains('fermo-tv') !== inTv) b.classList.toggle('fermo-tv', inTv);
-  }, 600);
 }
 var _orientStato = 'mai calcolato';
 function _tvPienoSchermo(acceso) {

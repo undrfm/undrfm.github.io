@@ -3691,6 +3691,11 @@ window.addEventListener('resize', function () { setTimeout(adattaCodiceCrew, 60)
 // separati, ognuno con la sua texture: 294 MB di memoria video sul telefono,
 // che e' il motivo per cui il sistema uccideva l'app e ripartiva dal login.
 function _avviaSfondoTela() {
+  // iPhone e iPad: niente tela, si usano i quattro livelli CSS come prima.
+  // Vedi il commento nel foglio di stile: la' spiega il perche'.
+  var _melo = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (_melo) { document.body.classList.add('sfondo-css'); return; }
   var tela = document.getElementById('sfondo-tela');
   if (!tela || !tela.getContext) return;
   var ctx = tela.getContext('2d');
@@ -6833,6 +6838,15 @@ html.undr-ruota .screen { height: 100% !important; }
    al loro posto UNA tela grande quanto lo schermo, su cui vengono disegnate
    le stesse figure, gia' sfocate una volta sola all'avvio. */
 .aurora, .blob { display: none !important; }
+/* Su iPhone la tela va TOLTA e si torna ai quattro livelli di prima.
+   Una tela che si ridipinge di continuo dietro tutta l'interfaccia costringe
+   Safari a ricomporre l'intera pagina a ogni fotogramma: le icone della
+   playlist sfarfallano e la PWA si inchioda del tutto. La tela serviva a
+   risolvere la memoria video dell'ANDROID (294 MB, l'app veniva uccisa), un
+   problema che su iPhone non si e' mai presentato. Il disegno e' lo stesso,
+   cambia solo come viene messo insieme. */
+body.sfondo-css .aurora, body.sfondo-css .blob { display: block !important; }
+body.sfondo-css #sfondo-tela { display: none !important; }
 #sfondo-tela {
   position: fixed; inset: 0; width: 100%; height: 100%;
   z-index: 0; pointer-events: none; display: block;

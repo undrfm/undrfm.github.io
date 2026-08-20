@@ -6845,6 +6845,37 @@ html.undr-ruota .screen { height: 100% !important; }
    risolvere la memoria video dell'ANDROID (294 MB, l'app veniva uccisa), un
    problema che su iPhone non si e' mai presentato. Il disegno e' lo stesso,
    cambia solo come viene messo insieme. */
+/* ── iPHONE: L'INTERFACCIA RESTA DRITTA ───────────────────────────
+   Su Android l'app e' bloccata in verticale dal manifesto: girando il telefono
+   la finestra non ruota, e in TV e' l'app a ruotare il solo video.
+   Su iPhone quel blocco non esiste e la PAGINA ruota davvero: giravano tutte
+   le schermate. Qui la si contro-ruota, cosi' resta dritta come su Android.
+   In TV invece si lascia girare: li' l'orizzontale serve, ed e' il solo video
+   a riempire lo schermo. */
+/* Non c'e' un contenitore unico: le schermate stanno direttamente nel corpo
+   della pagina, quindi si ruota quello. Cosi' vengono dietro anche i pannelli
+   e lo sfondo, senza doverli elencare uno per uno. */
+body.melo-dritto {
+  position: fixed; top: 0; left: 0;
+  width: 100vh; height: 100vw;
+  transform-origin: top left;
+  overflow: hidden;
+}
+/* due versi, perche' il telefono si puo' girare da una parte o dall'altra */
+body.melo-dritto.verso-orario     { transform: translateX(100vw) rotate(90deg); }
+body.melo-dritto.verso-antiorario { transform: translateY(100vh) rotate(-90deg); }
+
+/* In TV su iPhone la pagina e' gia' orizzontale: il video riempie lo schermo
+   COSI' COM'E', senza la rotazione di 90 gradi che serve su Android. */
+body.melo-tv #yt-iframe-wrap {
+  position: fixed !important; inset: 0 !important; z-index: 40 !important;
+  width: 100vw !important; height: 100vh !important;
+  transform: none !important; background: #000 !important;
+}
+body.melo-tv .room-header, body.melo-tv .tabbar-bottom, body.melo-tv .tv-logo-row,
+body.melo-tv .tv-antennas, body.melo-tv .tv-ticker-row, body.melo-tv .tv-controls,
+body.melo-tv .aurora, body.melo-tv .blob { display: none !important; }
+body.melo-tv { background: #000 !important; }
 body.sfondo-css .aurora, body.sfondo-css .blob { display: block !important; }
 body.sfondo-css #sfondo-tela { display: none !important; }
 #sfondo-tela {
@@ -8401,8 +8432,49 @@ function _inTv() {
   return !!(tv && st && st.classList.contains('active') &&
             getComputedStyle(tv).display !== 'none');
 }
+// ═════ iPHONE: TIENI DRITTA L'INTERFACCIA ══════════════════════
+// Su Android ci pensa il manifesto (schermo bloccato in verticale). Su iPhone
+// non c'e' modo di bloccarlo, quindi la pagina ruota e giravano tutte le
+// schermate. Qui la si contro-ruota fuori dalla TV; dentro la TV si lascia
+// girare, perche' li' l'orizzontale serve al video.
+var _meloDisp = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+function _meloOrientamento() {
+  if (!_meloDisp) return;
+  var ang = 0;
+  try {
+    ang = (screen.orientation && typeof screen.orientation.angle === 'number')
+          ? screen.orientation.angle
+          : (typeof window.orientation === 'number' ? window.orientation : 0);
+  } catch (e) { ang = 0; }
+  var orizz = (ang === 90 || ang === -90 || ang === 270);
+  var inTv = false;
+  try { inTv = _inTv(); } catch (e) {}
+  var b = document.body;
+
+  // in TV e di lato: video a tutto schermo, pagina lasciata com'e'
+  b.classList.toggle('melo-tv', orizz && inTv);
+  // fuori dalla TV e di lato: interfaccia contro-ruotata, resta dritta
+  b.classList.toggle('melo-dritto', orizz && !inTv);
+  b.classList.toggle('verso-orario', orizz && !inTv && (ang === 90));
+  b.classList.toggle('verso-antiorario', orizz && !inTv && (ang === -90 || ang === 270));
+}
+
+if (_meloDisp) {
+  window.addEventListener('orientationchange', function () { setTimeout(_meloOrientamento, 120); });
+  window.addEventListener('resize', function () { setTimeout(_meloOrientamento, 120); });
+  try { if (screen.orientation && screen.orientation.addEventListener) {
+    screen.orientation.addEventListener('change', function () { setTimeout(_meloOrientamento, 120); });
+  } } catch (e) {}
+  setInterval(_meloOrientamento, 700);   // rete di sicurezza: cambio scheda, rientro dall'app
+  setTimeout(_meloOrientamento, 400);
+}
 var _orientStato = 'mai calcolato';
 function _tvPienoSchermo(acceso) {
+  // Su iPhone la pagina ruota davvero e ci pensa _meloOrientamento: qui non
+  // si tocca niente, altrimenti il video verrebbe ruotato due volte.
+  if (_meloDisp) return;
   if (document.body.classList.contains('tv-orizz') === acceso) return;
   document.body.classList.toggle('tv-orizz', acceso);
   _orientStato = acceso ? 'TV a pieno schermo' : 'vista normale';

@@ -2216,6 +2216,7 @@ function onQueryInput(v) {
   if (f !== _queueFilter) { _queueFilter = f; renderQueue(); }
 }
 function renderQueue() {
+  let _daRisolvere = [];   // le richieste si raccolgono e partono DOPO il disegno
   updatePlSwitchCounts();
   _updateNpPin();
   const el = document.getElementById('queue-list');
@@ -2230,7 +2231,7 @@ function renderQueue() {
   el.innerHTML = queue.map((s, i) => {
     if (!_matchesFilter(s)) return '';
     _backfillMeta(s);   // tracce senza titolo/band: completale ora (una volta sola)
-    risolviArtista(s);  // e sotto al titolo il gruppo, non il canale
+    _daRisolvere.push(s);   // fuori dal ciclo: qui dentro NON si tocca la lista
     const c = cleanTitle(s);
     const saved = stashKeys[(s.source || 'youtube') + ':' + s.videoId];
     return `
@@ -2257,6 +2258,16 @@ function renderQueue() {
     _lastScrollIdx = currentIdx;
     const _cur = el.querySelector('.queue-item.current');
     if (_cur) setTimeout(function(){ try { _cur.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch(e) { _cur.scrollIntoView(); } }, 60);
+  }
+  // Le richieste sull'artista partono ORA, a lista gia' disegnata, e in un
+  // giro separato: se una risponde subito dalla memoria non puo' piu' far
+  // ripartire il disegno da dentro il disegno.
+  if (_daRisolvere.length) {
+    const _lista = _daRisolvere;
+    _daRisolvere = [];
+    setTimeout(function () {
+      for (var i = 0; i < _lista.length; i++) { try { risolviArtista(_lista[i]); } catch (e) {} }
+    }, 0);
   }
 }
 
@@ -3579,7 +3590,26 @@ function _applicaArtista(s, esito) {
   if (esito.titolo) t.title = String(esito.titolo).slice(0, 80);
   t.artistaOk = 1;
   try { _npPinKey = ''; } catch (e) {}
-  try { renderQueue(); } catch (e) {}
+  _chiediRidisegno();   // MAI renderQueue() da qui: vedi sotto
+}
+
+// renderQueue chiama risolviArtista DENTRO il ciclo che costruisce la lista.
+// Se l'artista e' gia' in memoria, _applicaArtista rispondeva subito e
+// richiamava renderQueue mentre il primo stava ancora girando: una coda di N
+// tracce faceva N ridisegni annidati, ognuno a ricostruire l'intera lista.
+// Si innescava solo dalla seconda sessione in poi, quando la memoria degli
+// artisti e' piena — ed e' il motivo per cui il processo che disegna la pagina
+// saliva a 1,6 GB e il sistema uccideva l'app.
+// Ora il ridisegno e' UNO SOLO e differito: le richieste che arrivano insieme
+// si fondono in un unico disegno al giro successivo.
+var _ridisegnoChiesto = false;
+function _chiediRidisegno() {
+  if (_ridisegnoChiesto) return;
+  _ridisegnoChiesto = true;
+  setTimeout(function () {
+    _ridisegnoChiesto = false;
+    try { renderQueue(); } catch (e) {}
+  }, 0);
 }
 
 function risolviArtista(s) {

@@ -12,7 +12,7 @@
 <meta name="msapplication-tap-highlight" content="no">
 <link rel="manifest" id="pwa-manifest">
 <link rel="apple-touch-icon" id="apple-icon">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://localhost tauri://localhost capacitor://localhost; script-src 'self' 'unsafe-inline' blob: https://cdn.jsdelivr.net https://www.youtube.com https://s.ytimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com https://i.vimeocdn.com; frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; media-src 'self' blob: data:; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; connect-src 'self' blob: https://localhost https://cebssqzlzvekytgzrqju.supabase.co https://soyvmntqgpydansubrdw.supabase.co https://noembed.com https://www.youtube.com https://y.com.sb https://invidious.jing.rocks https://inv.nadeko.net https://invidious.privacyredirect.com https://iv.melmac.space https://invidious.f5.si https://yt.artemislena.eu https://invidious.protokolla.fi https://invidious.nerdvpn.de wss://0.peerjs.com https://0.peerjs.com">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://localhost tauri://localhost capacitor://localhost; script-src 'self' 'unsafe-inline' blob: https://cdn.jsdelivr.net https://www.youtube.com https://s.ytimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com https://i.vimeocdn.com; frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; media-src 'self' blob: data:; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; connect-src 'self' blob: https://localhost https://cebssqzlzvekytgzrqju.supabase.co https://soyvmntqgpydansubrdw.supabase.co https://noembed.com https://musicbrainz.org https://www.youtube.com https://y.com.sb https://invidious.jing.rocks https://inv.nadeko.net https://invidious.privacyredirect.com https://iv.melmac.space https://invidious.f5.si https://yt.artemislena.eu https://invidious.protokolla.fi https://invidious.nerdvpn.de wss://0.peerjs.com https://0.peerjs.com">
 <title>UNDR</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap');
@@ -163,7 +163,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 
 /* add bar */
 .add-song-bar { padding: 10px 16px; padding-bottom: calc(10px + var(--safe-bottom)); border-top: 1px solid var(--sep); flex-shrink: 0; background: var(--bg); }
-.add-row { display: flex; gap: 10px; align-items: center; }
+.add-row, .chat-row { display: flex; gap: 10px; align-items: center; }
 .add-row .input-field { flex: 1; font-size: 16px; padding: 14px 18px; border-radius: 24px; }
 .btn-add { background: var(--accent); color: #080808; border: none; border-radius: 24px; padding: 11px 20px; font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0.1em; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
 
@@ -658,7 +658,7 @@ window.onYouTubeIframeAPIReady = function() {
         if (e.data === YT.PlayerState.ENDED) {
           stopYTTicker();
           stopProgress();
-          nextTrack();
+          _playNextAuto();   // fine automatica: passa dal freno
         }
         if (e.data === YT.PlayerState.PLAYING) {
           setAudioStatus('playing', getLang().playing || 'in riproduzione');
@@ -1417,8 +1417,28 @@ function _submitGuard() {
   return true;
 }
 
+
+// Uscire da una crew ripulisce tutto, ma ENTRARE in una crew nuova non
+// ripuliva niente — e l'app rientra da sola nell'ultima crew all'avvio.
+// Restavano appesi: il vecchio collegamento, i membri di prima (fantasmi che
+// risultano online e non ci sono) e soprattutto trustedHostPeer, che se punta
+// a un ospite sparito senza avvisare fa RIFIUTARE IN SILENZIO ogni STATE del
+// nuovo ospite: chi entra non vede ne' la coda ne' i membri, e agli altri
+// sembra presente. La coda non si tocca: la ripristina restoreSavedQueue.
+function _pulisciSessioneP2P() {
+  try { Object.values(connections).forEach(function (c) { try { c.close(); } catch (e) {} }); } catch (e) {}
+  try { if (peer) peer.destroy(); } catch (e) {}
+  try { releaseRelaySlot(); } catch (e) {}
+  peer = null;
+  connections = {};
+  peers = {};
+  trustedHostPeer = null;
+  try { for (var k in chatRateMap) delete chatRateMap[k]; } catch (e) {}
+  try { for (var k2 in songRateMap) delete songRateMap[k2]; } catch (e) {}
+}
 async function createRoom(preHash, isAuto) {
   if (!_submitGuard()) return;
+  _pulisciSessioneP2P();
   const rawName = document.getElementById('username-input').value.trim();
   const aliasCheck = validateAlias(rawName);
   if (!aliasCheck.ok) { showAliasError(aliasCheck.reason); return; }
@@ -1494,8 +1514,48 @@ async function createRoom(preHash, isAuto) {
   });
 }
 
+
+// Domanda si'/no con il vestito dell'app (niente confirm() di sistema).
+// Il testo entra come testo puro: il codice crew lo scrive l'utente.
+function chiediConferma(titolo, testo, etichettaSi, etichettaNo) {
+  return new Promise(function (risolvi) {
+    var m = document.getElementById('chiedi-modal');
+    if (!m) { risolvi(false); return; }
+    document.getElementById('chiedi-tit').textContent = titolo;
+    document.getElementById('chiedi-testo').textContent = testo;
+    var si = document.getElementById('chiedi-si');
+    var no = document.getElementById('chiedi-no');
+    si.textContent = etichettaSi || 'OK';
+    no.textContent = etichettaNo || 'ANNULLA';
+    function chiudi(esito) {
+      m.classList.remove('aperto');
+      si.onclick = null; no.onclick = null; m.onclick = null;
+      risolvi(esito);
+    }
+    si.onclick = function () { chiudi(true); };
+    no.onclick = function () { chiudi(false); };
+    m.onclick = function (e) { if (e.target === m) chiudi(false); };
+    m.classList.add('aperto');
+  });
+}
+
+// "la crew non esiste" e "il cloud non risponde" sono due cose diverse:
+// confonderle bloccherebbe l'ingresso ogni volta che si e' offline.
+async function crewEsiste(code, hash) {
+  try {
+    const resp = await fetch(SB_URL + '/rest/v1/rpc/undr_get_crew', {
+      method: 'POST',
+      headers: sbHeaders(),
+      body: JSON.stringify({ p_code: (code || '').toUpperCase(), p_hash: hash || '' }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!resp.ok) return 'boh';
+    return (await resp.json()) ? 'si' : 'no';
+  } catch (e) { return 'boh'; }
+}
 async function joinRoom(preHash, isAuto) {
   if (!_submitGuard()) return;
+  _pulisciSessioneP2P();
   const rawName = document.getElementById('username-input').value.trim();
   const aliasCheck = validateAlias(rawName);
   if (!aliasCheck.ok) { showAliasError(aliasCheck.reason); return; }
@@ -1522,6 +1582,30 @@ async function joinRoom(preHash, isAuto) {
     toast('⚠ crew protetta — password errata o mancante');
     crewPasswordHash = '';
     return;
+  }
+
+  // ── LA CREW ESISTE DAVVERO? ──
+  // Il controllo password risponde "via libera" anche per un codice che non
+  // esiste (nessuna password = nessun divieto), quindi bastava sbagliare una
+  // lettera per finire dentro una crew fantasma vuota. Ora si chiede.
+  // Solo all'ingresso manuale: nel rientro automatico l'accesso era gia' buono.
+  if (!isAuto) {
+    const _esiste = await crewEsiste(roomCode, pwdHash);
+    if (_esiste === 'no') {
+      if (roomCode.length < 5) {
+        // le crew nuove vogliono almeno 5 caratteri: inutile proporre di aprirla
+        toast('nessuna crew con il codice ' + roomCode);
+        crewPasswordHash = '';
+        return;
+      }
+      const _vuoi = await chiediConferma(
+        'CREW NON TROVATA',
+        'Nessuna crew con il codice ' + roomCode + '.\nVuoi aprirla tu adesso?',
+        'APRI LA CREW', 'ANNULLA');
+      if (!_vuoi) { crewPasswordHash = ''; return; }
+      _submitLock = 0;   // il blocco anti doppio invio l'ha gia' consumato ENTRA
+      return createRoom(preHash, isAuto);
+    }
   }
 
   // ── STEP 1: Enter room immediately — no host required ──
@@ -1556,6 +1640,10 @@ async function joinRoom(preHash, isAuto) {
       setupConn(conn);
 
       const joinTimeout = setTimeout(() => {
+        // il tentativo scaduto va chiuso: lasciandolo aperto si accumulavano
+        // collegamenti a meta' verso la stessa crew, e il primo che si apriva
+        // in ritardo faceva ripartire un HELLO fuori tempo
+        try { conn.close(); } catch (e) {}
         if (_joinAttempt < _targets.length) {
           tryConnect();
         } else {
@@ -1929,6 +2017,7 @@ async function addSong() {
       song.author = meta.author;
       song.thumb = meta.thumb || '';
       song.duration = meta.duration || 0;
+      risolviArtista(song);
       // Se duration mancante, prova a recuperarla dalla pagina YouTube
       if (song.duration === 0 && parsed.source !== 'vimeo') {
         fetchYTDuration(parsed.id).then(dur => {
@@ -2003,6 +2092,7 @@ function _backfillMeta(s) {
       if (meta.title && (!t.title || /^(youtube|vimeo|track)\s*[·:]/i.test(t.title))) { t.title = meta.title; cambiato = true; }
       if (!t.thumb && meta.thumb) { t.thumb = meta.thumb; cambiato = true; }
       if (cambiato) { _npPinKey = ''; renderQueue(); }
+      risolviArtista(t);   // e ora chiedi chi e' DAVVERO l'artista
     }).catch(function() {});
   } catch(e) {}
 }
@@ -2136,6 +2226,7 @@ function renderQueue() {
   el.innerHTML = queue.map((s, i) => {
     if (!_matchesFilter(s)) return '';
     _backfillMeta(s);   // tracce senza titolo/band: completale ora (una volta sola)
+    risolviArtista(s);  // e sotto al titolo il gruppo, non il canale
     const c = cleanTitle(s);
     const saved = stashKeys[(s.source || 'youtube') + ':' + s.videoId];
     return `
@@ -2191,6 +2282,7 @@ function toggleLoop() {
 let _shuffleEnabled = false;
 function toggleShuffle() {
   _shuffleEnabled = !_shuffleEnabled;
+  _shuffleFatte = [];   // si ricomincia il giro da capo
   const btn = document.getElementById('shuffle-btn');
   if (btn) {
     btn.classList.toggle('ctrl-on', _shuffleEnabled);
@@ -2227,23 +2319,54 @@ function removeSong(songId) {
   toast('track rimossa');
 }
 
+// La fine della STESSA traccia viene segnalata da quattro punti diversi:
+// l'evento della libreria ufficiale di YouTube, il messaggio grezzo
+// dell'iframe, il sorpasso del conta-tempo e il timer di riserva. Senza freno
+// avanzavano tutti nel giro di mezzo secondo: la coda saltava due o tre tracce
+// e l'iframe riceveva tre caricamenti di fila, che lo lasciano incollato alla
+// stessa canzone. Era il "loop e shuffle fanno come gli pare" che peggiorava
+// finche' non si chiudeva l'app. Ora passa solo il primo dei quattro.
+var _ultimoAvanzamento = 0;
+
+// Giro dello shuffle: una traccia gia' uscita non ricapita finche' non sono
+// uscite tutte. Prima si sorteggiava ogni volta sull'intera coda, ed e' il
+// motivo per cui la stessa canzone tornava piu' e piu' volte.
+var _shuffleFatte = [];
+
 function _playNextAuto() {
+  if (Date.now() - _ultimoAvanzamento < 1500) return;   // fine automatica: passa il primo
+  _avanzaTraccia();
+}
+
+function nextTrack() {
+  _avanzaTraccia();   // richiesta a mano: deve passare sempre
+}
+
+function _avanzaTraccia() {
+  _ultimoAvanzamento = Date.now();
   clearTimeout(_autoNextWatchdog);
   _autoNextWatchdog = null;
   // BLOCCO A PROVA DI BOMBA: se l'utente ha messo in pausa, non avanzare MAI.
   // (La fine-traccia vera passa da stopProgress che azzera _pausedAt, quindi lì si avanza.)
   if (_pausedAt && !_progressRunning) return;
   if (!queue.length) return;
+
   if (_shuffleEnabled) {
-    // Casuale — qualsiasi traccia tranne quella corrente
-    let nextIdx;
-    if (queue.length === 1) {
-      nextIdx = 0;
-    } else {
-      do { nextIdx = Math.floor(Math.random() * queue.length); }
-      while (nextIdx === currentIdx);
+    var attuale = queue[currentIdx];
+    if (attuale && _shuffleFatte.indexOf(attuale.id) < 0) _shuffleFatte.push(attuale.id);
+    var restanti = [];
+    for (var i = 0; i < queue.length; i++) {
+      if (i === currentIdx) continue;
+      if (_shuffleFatte.indexOf(queue[i].id) < 0) restanti.push(i);
     }
-    currentIdx = nextIdx;
+    if (!restanti.length) {
+      // giro completato: le ha suonate tutte
+      _shuffleFatte = [];
+      if (!_loopEnabled) { toast('coda finita'); return; }
+      for (var j = 0; j < queue.length; j++) if (j !== currentIdx) restanti.push(j);
+      if (!restanti.length) restanti.push(currentIdx);   // una sola traccia in coda
+    }
+    currentIdx = restanti[Math.floor(Math.random() * restanti.length)];
   } else if (currentIdx < queue.length - 1) {
     currentIdx++;
   } else if (_loopEnabled) {
@@ -2252,10 +2375,6 @@ function _playNextAuto() {
     return;
   }
   playTrack(currentIdx, true);
-}
-
-function nextTrack() {
-  _playNextAuto();
 }
 
 // ── AUDIO ENGINE ──
@@ -3013,7 +3132,7 @@ window.addEventListener('message', (e) => {
     // YouTube handled by YT Player API callbacks (onYouTubeIframeAPIReady)
     // Vimeo events
     if (e.origin.includes('vimeo.com')) {
-      if (data.event === 'finish') { console.log('[UNDR] Vimeo finish'); clearTimeout(_autoNextTimer); stopProgress(); nextTrack(); }
+      if (data.event === 'finish') { console.log('[UNDR] Vimeo finish'); clearTimeout(_autoNextTimer); stopProgress(); _playNextAuto(); }
       if (data.event === 'play') { setAudioStatus('playing', (getLang().playing||'in riproduzione') + ' · vimeo'); document.getElementById('audio-play-btn').textContent = '⏸'; _progressRunning = true; if (_pausedAt) { _progressStart = Date.now() - _pausedAt; _pausedAt = 0; } _setupAutoNextWatchdog(); if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'; }
       if (data.event === 'pause') { setAudioStatus('', getLang().paused || 'in pausa'); document.getElementById('audio-play-btn').textContent = '▶'; _progressRunning = false; _pausedAt = Date.now() - _progressStart; clearTimeout(_autoNextWatchdog); _autoNextWatchdog = null; if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'; }
       if (data.event === 'error') showAudioError();
@@ -3304,19 +3423,31 @@ const TITLE_FEAT_RE = /\s*[\(\[]?\s*(feat\.?|ft\.?|featuring)\s+[^\)\]]+[\)\]]?\
 // VINCOLO: in "song" deve restare SOLO il titolo della canzone — niente (Official Video), [4K], | canale, feat., ecc.
 function cleanTitle(s) {
   if (!s) return { artist: '', song: '' };
-  let artist = unescHtml(s.author || '').replace(/\s*-\s*topic$/i, '').replace(/VEVO$/i, '').trim();
+  const _grezzo = unescHtml(s.author || '');
+  // "Artista - Topic" e i canali VEVO sono caricamenti ufficiali: li' il nome
+  // del canale E' l'artista, e va creduto piu' del titolo.
+  const _canaleUfficiale = /(\s*-\s*topic|vevo)\s*$/i.test(_grezzo);
+  let artist = _grezzo.replace(/\s*-\s*topic$/i, '').replace(/VEVO$/i, '').trim();
   let t = unescHtml(s.title || '');
   t = t.replace(TITLE_JUNK_RE, '');          // blocchi (…)/[…]/{…} spazzatura
   t = t.replace(/\s*\|.*$/, '');             // tutto dopo una pipe (di solito il canale)
   t = t.replace(/\s{2,}/g, ' ').trim();
   // separa "Artista - Canzone" (o "Canzone - Artista") in modo robusto
-  const _norm = function(x){ return (x || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); };
+  // confronto tollerante: via accenti, maiuscole e punteggiatura
+  const _norm = function(x){
+    return (x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
+  };
   const _an = _norm(artist);
   const _m = t.match(/^(.{2,60}?)\s+[-–—:|·]\s+(.+)$/);
   if (_m) {
     const _left = _m[1].trim(), _right = _m[2].trim();
-    if (_an && _norm(_right) === _an) { t = _left; }       // "Canzone - Artista"
-    else { if (!artist) artist = _left; t = _right; }       // "Artista - Canzone"
+    if (_an && _norm(_right) === _an) { artist = _right; t = _left; }   // "Canzone - Artista"
+    else if (_an && _norm(_left) === _an) { artist = _left; t = _right; } // "Artista - Canzone", canale = artista
+    else if (_canaleUfficiale) { t = _right; }                          // canale Topic/VEVO: e' davvero suo
+    // Canale generico (una raccolta, un ricaricatore): il nome vero sta nel
+    // titolo, non nel canale. Prima vinceva sempre il canale, ed e' il motivo
+    // per cui sotto il titolo compariva chi aveva caricato il video.
+    else { artist = _left; t = _right; }
   }
   // VINCOLO finale: via "feat./ft. …" in coda, via suffissi "official video/audio/HD…", via virgolette/separatori
   let song = t.replace(TITLE_FEAT_RE, '');
@@ -3325,6 +3456,149 @@ function cleanTitle(s) {
   return { artist, song: song || t || (s.title || '') };
 }
 
+
+// ── ARTISTA VERO ─────────────────────────────────────────
+// Il nome che YouTube restituisce e' quello del CANALE. Su un canale di
+// ricarica non e' l'artista, e a volte titolo e artista sono pure invertiti
+// ("ZITTI E BUONI - Maneskin"): dal solo testo non si capisce quale dei due
+// sia il gruppo. Lo chiedo a MusicBrainz, l'archivio musicale libero: niente
+// chiave, niente tracciamento, CORS aperto. Accetta UNA richiesta al secondo
+// (oltre risponde 503), quindi le metto in fila e ricordo le risposte.
+var _mbCache = {};
+try { _mbCache = JSON.parse(localStorage.getItem('undr-artisti') || '{}'); } catch (e) { _mbCache = {}; }
+var _mbFila = Promise.resolve();
+var _mbChiesti = {};
+
+function _mbRicorda(chiave, esito) {
+  _mbCache[chiave] = esito;
+  try {
+    var k = Object.keys(_mbCache);
+    if (k.length > 400) {
+      var t = {};
+      k.slice(-400).forEach(function (x) { t[x] = _mbCache[x]; });
+      _mbCache = t;
+    }
+    localStorage.setItem('undr-artisti', JSON.stringify(_mbCache));
+  } catch (e) {}
+}
+
+function _mbCerca(query, limite, tentativo) {
+  // ogni richiesta parte almeno 1,2 s dopo la precedente
+  _mbFila = _mbFila.then(function () { return new Promise(function (r) { setTimeout(r, 1200); }); });
+  return _mbFila.then(function () {
+    return fetch('https://musicbrainz.org/ws/2/recording?fmt=json&limit=' + (limite || 3) +
+                 '&query=' + encodeURIComponent(query), { signal: AbortSignal.timeout(9000) })
+      .then(function (r) {
+        // 503 = ho bussato troppo in fretta. Un secondo tentativo piu' in la',
+        // poi lascio perdere: sotto il titolo resta il nome del canale.
+        if (!r.ok) {
+          if (r.status === 503 && !tentativo) {
+            return new Promise(function (ok) { setTimeout(ok, 2500); })
+              .then(function () { return _mbCerca(query, limite, 1); });
+          }
+          return [];
+        }
+        return r.json().then(function (d) { return (d && d.recordings) || []; });
+      })
+      .catch(function () { return []; });
+  });
+}
+
+function _mbNome(rec) {
+  return (rec['artist-credit'] || []).map(function (a) { return a.name; }).join(', ');
+}
+
+function _mbCima(query) {
+  return _mbCerca(query, 3).then(function (recs) {
+    var t = recs[0];
+    if (!t) return null;
+    return { punteggio: t.score || 0, titolo: t.title || '', artista: _mbNome(t) };
+  });
+}
+
+// Su un titolo da solo decine di artisti fanno punteggio pieno: l'originale e
+// tutte le sue cover pesano uguale, e prendere il primo della lista sbaglia
+// ("Smells Like Teen Spirit" tornava The Flying Pickets). Peso ogni artista
+// con quante pubblicazioni ha quel brano — l'originale sta su decine di dischi,
+// la cover su uno — e accetto solo se stacca nettamente il secondo. Su titoli
+// molto comuni ("Creep", "Hallelujah") nessuno stacca: meglio non rispondere
+// che rispondere a caso.
+function _mbPesa(recs) {
+  var peso = {};
+  for (var i = 0; i < recs.length; i++) {
+    var r = recs[i];
+    if ((r.score || 0) < 95) continue;
+    var nome = _mbNome(r);
+    if (!nome) continue;
+    if (!peso[nome]) peso[nome] = { pubbl: 0, titolo: r.title || '' };
+    peso[nome].pubbl += ((r.releases || []).length || 1);
+  }
+  var lista = Object.keys(peso).map(function (n) {
+    return { artista: n, pubbl: peso[n].pubbl, titolo: peso[n].titolo };
+  }).sort(function (a, b) { return b.pubbl - a.pubbl; });
+  if (!lista.length) return null;
+  var primo = lista[0], secondo = lista[1];
+  if (primo.pubbl < 5) return null;
+  if (secondo && primo.pubbl < secondo.pubbl * 2) return null;
+  return { artista: primo.artista, titolo: primo.titolo };
+}
+
+function _applicaArtista(s, esito) {
+  if (!esito || !esito.artista) return;
+  var t = queue.find(function (x) {
+    return x.videoId === s.videoId && (x.source || 'youtube') === (s.source || 'youtube');
+  }) || s;
+  // scrivo artista e canzone gia' separati: cosi' non resta piu' niente da
+  // indovinare, e il dato giusto viaggia anche verso gli altri della crew
+  t.author = String(esito.artista).slice(0, 50);
+  if (esito.titolo) t.title = String(esito.titolo).slice(0, 80);
+  t.artistaOk = 1;
+  try { _npPinKey = ''; } catch (e) {}
+  try { renderQueue(); } catch (e) {}
+}
+
+function risolviArtista(s) {
+  try {
+    if (!s || !s.videoId || s.artistaOk) return;
+    // canale ufficiale: il nome e' gia' quello giusto, non disturbo nessuno
+    if (/(\s*-\s*topic|vevo)\s*$/i.test(unescHtml(s.author || ''))) return;
+    var chiave = (s.source || 'youtube') + ':' + s.videoId;
+    if (_mbCache[chiave]) { _applicaArtista(s, _mbCache[chiave]); return; }
+    if (_mbChiesti[chiave]) return;
+    _mbChiesti[chiave] = 1;
+
+    var c = cleanTitle(s);
+    var sin = (c.artist || '').trim(), des = (c.song || '').trim();
+    if (!des) return;
+
+    var lavoro;
+    if (sin && des) {
+      // provo le due direzioni: quella giusta fa 100, quella sbagliata 0
+      lavoro = Promise.all([
+        _mbCima('artist:"' + sin + '" AND recording:"' + des + '"'),
+        _mbCima('artist:"' + des + '" AND recording:"' + sin + '"')
+      ]).then(function (r) {
+        var dritto = r[0], rovescio = r[1];
+        var pd = dritto ? dritto.punteggio : 0, pr = rovescio ? rovescio.punteggio : 0;
+        if (pd >= 90 && pd >= pr) return { artista: dritto.artista, titolo: dritto.titolo };
+        if (pr >= 90) return { artista: rovescio.artista, titolo: rovescio.titolo };
+        return null;
+      });
+    } else {
+      lavoro = Promise.resolve(null);
+    }
+
+    lavoro.then(function (esito) {
+      if (esito) return esito;
+      // nessuna coppia convincente: provo col solo titolo, pesando i risultati
+      return _mbCerca('recording:"' + des + '"', 100).then(_mbPesa);
+    }).then(function (esito) {
+      if (!esito || !esito.artista) return;
+      _mbRicorda(chiave, esito);
+      _applicaArtista(s, esito);
+    }).catch(function () {});
+  } catch (e) {}
+}
 // ── SECURITY: sanitize color to safe hex only ──
 function sanitizeColor(c) {
   if (typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c)) return c;
@@ -3349,7 +3623,9 @@ function sanitizeSong(s) {
     addedBy: escHtml((s.addedBy || 'anon').toString().slice(0, 30)),
     votes: typeof s.votes === 'number' ? Math.max(0, Math.floor(s.votes)) : 0,
     duration: typeof s.duration === 'number' ? Math.max(0, Math.floor(s.duration)) : 0,
-    voters: Array.isArray(s.voters) ? s.voters.slice(0,500).filter(v => typeof v === 'string' && v.length < 100 && /^[A-Za-z0-9_-]+$/.test(v)) : []
+    voters: Array.isArray(s.voters) ? s.voters.slice(0,500).filter(v => typeof v === 'string' && v.length < 100 && /^[A-Za-z0-9_-]+$/.test(v)) : [],
+    // gia' verificato da chi l'ha aggiunta: gli altri non richiedono nulla
+    artistaOk: s.artistaOk ? 1 : 0
   };
 }
 
@@ -4104,35 +4380,62 @@ document.addEventListener('click', (e) => {
 });
 
 // ── PWA INIT ──
-function generateIcon(size, radius) {
-  const c = document.createElement('canvas');
+// Icona della PWA. Era disegnata qui col vecchio logo su fondo nero, del tutto
+// slegata dalle icone dell'app: per questo cambiando l'icona dell'APK quella
+// della schermata home restava la vecchia, sia su Android che su iPhone.
+// Ora e' lo stesso disegno: fondo club, luce viola e luce lime, UN/DR in
+// Unbounded, equalizzatore. Colori fissi come sull'APK, non del tema.
+//   modo 'piena'       tutto campo con angoli stondati (Android, uso normale)
+//   modo 'quadra'      tutto campo senza stondatura (iPhone la stonda da solo)
+//   modo 'ritagliabile' contenuto al 68%, per il ritaglio adattivo di Android
+function generateIcon(size, modo) {
+  var c = document.createElement('canvas');
   c.width = c.height = size;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#0a0a0a';
-  roundRect(ctx, 0, 0, size, size, radius);
-  ctx.fill();
-  // subtle accent glow bottom
-  const grd = ctx.createRadialGradient(size*0.5, size*0.85, 0, size*0.5, size*0.85, size*0.55);
-  grd.addColorStop(0, _col('--accent-alone2', 'rgba(200,245,58,0.35)'));
-  grd.addColorStop(1, 'transparent');
-  ctx.fillStyle = grd;
-  ctx.fillRect(0, 0, size, size);
-  // UN in white
-  const fs = size * 0.38;
-  ctx.font = `${fs}px 'Arial Black', Arial`;
+  var ctx = c.getContext('2d');
+  var u = size / 512;
+
+  if (modo === 'piena') {
+    var r = size * 0.22;
+    roundRect(ctx, 0, 0, size, size, r);
+    ctx.clip();
+  }
+
+  var g = ctx.createLinearGradient(0, 0, size, size);
+  g.addColorStop(0, '#1b1430'); g.addColorStop(1, '#07060b');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+
+  var l1 = ctx.createRadialGradient(size*0.18, size*0.14, 0, size*0.18, size*0.14, size*0.52);
+  l1.addColorStop(0, 'rgba(123,58,245,0.62)'); l1.addColorStop(1, 'rgba(123,58,245,0)');
+  ctx.fillStyle = l1; ctx.fillRect(0, 0, size, size);
+
+  var l2 = ctx.createRadialGradient(size*0.86, size*0.90, 0, size*0.86, size*0.90, size*0.52);
+  l2.addColorStop(0, 'rgba(200,245,58,0.34)'); l2.addColorStop(1, 'rgba(200,245,58,0)');
+  ctx.fillStyle = l2; ctx.fillRect(0, 0, size, size);
+
+  ctx.save();
+  ctx.translate(size/2, size/2);
+  if (modo === 'ritagliabile') ctx.scale(0.68, 0.68);
+  ctx.translate(-size/2, -size/2);
+  ctx.translate(0, -29 * u);
+
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#f0f0f0';
-  ctx.fillText('UN', size * 0.5, size * 0.42);
-  // DR in accent
-  ctx.fillStyle = _col('--accent', '#c8f53a');
-  ctx.fillText('DR', size * 0.5, size * 0.72);
-  // thin underline
-  ctx.fillStyle = _col('--accent', '#c8f53a');
-  ctx.fillRect(size*0.25, size*0.88, size*0.5, size*0.025);
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = '900 ' + (146 * u) + 'px Unbounded, "Arial Black", Arial';
+  ctx.fillStyle = '#f4f0fb';
+  ctx.fillText('UN', size/2, 243 * u);
+  ctx.fillStyle = '#c8f53a';
+  ctx.fillText('DR', size/2, 372 * u);
+
+  var barre = [[171,406,26],[209,392,40],[247,378,54],[285,396,36],[323,410,22]];
+  ctx.fillStyle = '#c8f53a';
+  for (var b = 0; b < barre.length; b++) {
+    var x = barre[b][0]*u, y = barre[b][1]*u, w = 26*u, h = barre[b][2]*u;
+    roundRect(ctx, x, y, w, h, Math.min(8*u, w/2, h/2));
+    ctx.fill();
+  }
+  ctx.restore();
   return c;
 }
-
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -4151,10 +4454,24 @@ function initPWA() {
   // Draw splash icon
   // splash rimosso
 
-  // Generate icons at multiple sizes
-  const icon192 = generateIcon(192, 40).toDataURL('image/png');
-  const icon512 = generateIcon(512, 100).toDataURL('image/png');
-  const icon180 = generateIcon(180, 38).toDataURL('image/png');
+  // Il logo usa Unbounded: se le icone si disegnano prima che il carattere sia
+  // pronto escono con un ripiego. Si aspetta, ma senza bloccare l'avvio.
+  try {
+    if (document.fonts && document.fonts.load) {
+      document.fonts.load('900 100px Unbounded').then(function () {
+        setTimeout(_creaIconePWA, 60);
+      }).catch(function () {});
+    }
+  } catch (e) {}
+  _creaIconePWA();
+}
+
+function _creaIconePWA() {
+  const icon192 = generateIcon(192, 'piena').toDataURL('image/png');
+  const icon512 = generateIcon(512, 'piena').toDataURL('image/png');
+  const icon180 = generateIcon(180, 'quadra').toDataURL('image/png');
+  const mask192 = generateIcon(192, 'ritagliabile').toDataURL('image/png');
+  const mask512 = generateIcon(512, 'ritagliabile').toDataURL('image/png');
 
   // Apple touch icon
   document.getElementById('apple-icon').href = icon180;
@@ -4174,9 +4491,14 @@ function initPWA() {
     background_color: '#0a0a0a',
     theme_color: '#0a0a0a',
     categories: ['music', 'social'],
+    // 'any' e 'maskable' separate: la seconda tiene il disegno dentro la zona
+    // sicura, cosi' Android puo' ritagliarla a cerchio o a goccia senza
+    // mangiarsi la scritta. Prima erano lo stesso file per entrambi gli usi.
     icons: [
-      { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-      { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+      { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: mask192, sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+      { src: mask512, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
     ],
     screenshots: [],
     shortcuts: [
@@ -5224,7 +5546,7 @@ body::before, body::after { display: none !important; }
 .like-burst { font-family: var(--mono); font-size: 10px; color: #b3abd0; }
 
 /* ── BARRA "INCOLLA LINK": pulsante DROP INTEGRATO dentro il campo arrotondato ── */
-.add-row { position: relative; display: block !important; }
+.add-row, .chat-row { position: relative; display: block !important; }
 .add-row .input-field {
   width: 100%; border-radius: 24px !important;
   padding: 14px 96px 14px 18px !important;
@@ -5703,6 +6025,19 @@ body::before, body::after { display: none !important; }
 .badge-icon.distintivo { background: none !important; border: none !important; }
 
 /* ══════════ RITAGLIO DELLA FOTO PROFILO ══════════ */
+
+/* finestra di conferma: stesso vestito del pannello ritaglio foto */
+#chiedi-modal {
+  display: none; position: fixed; inset: 0; z-index: 12100;
+  background: rgba(7,6,10,0.86);
+  align-items: center; justify-content: center; padding: 20px;
+}
+#chiedi-modal.aperto { display: flex; }
+.chiedi-testo {
+  font-family: var(--sans); font-size: 13.5px; line-height: 1.6;
+  color: rgba(236,232,245,0.86); white-space: pre-line;
+  margin: 12px 4px 16px;
+}
 #crop-modal {
   display: none; position: fixed; inset: 0; z-index: 12000;
   background: rgba(7,6,10,0.86);
@@ -5963,17 +6298,17 @@ body::before, body::after { display: none !important; }
    rimaste dal vecchio aspetto: top 15px per l'invio, top 5px per il drop.
    Con un'altezza fissa quei valori li spingevano più in basso del campo — ecco
    il disallineamento. Qui si centrano rispetto al campo, qualunque altezza abbia. */
-/* I due tasti sono ancorati a contenitori DIVERSI: il drop alla riga, che
-   finisce dove finisce il campo; l'invio alla barra, che è 18 px più larga del
-   campo per via del suo riempimento. Imporre lo stesso "right" a entrambi
-   faceva sporgere l'invio fuori dal campo. Valori separati, stesso risultato:
-   5 px di margine dal bordo del campo in tutti e due i casi. */
+/* Tutti e due i tasti stanno dentro la riga del proprio campo, e la riga
+   finisce esattamente dove finisce il campo. Prima l'invio era agganciato
+   alla BARRA della chat, che oltre a essere 18 px piu' larga del campo porta
+   in fondo il riempimento dell'area sicura (la striscia del tasto home):
+   su iPhone il suo centro cadeva 17 px sotto il centro del campo. Con la riga
+   il problema non si pone proprio, e le due misure tornano identiche. */
 #drop-btn, .send-btn {
   top: 50% !important; bottom: auto !important;
   transform: translateY(-50%) !important;
+  right: 5px !important;
 }
-#drop-btn  { right: 5px !important; }
-.send-btn  { right: 23px !important; }
 #drop-btn:active, .send-btn:active { transform: translateY(-50%) scale(0.93) !important; }
 
 /* pillola coda crew / la tua: icona + numero */
@@ -6573,8 +6908,10 @@ html.undr-ruota .screen { height: 100% !important; }
     </div>
 
     <div class="chat-input-bar">
+      <div class="chat-row">
       <input class="input-field" id="chat-input" placeholder="messaggio..." onfocus="this.placeholder=''" onblur="this.placeholder='messaggio...'" maxlength="500" onkeydown="if(event.key==='Enter') sendChat()">
       <button class="send-btn" onclick="sendChat()" title="invia" aria-label="invia"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.4 20.6l19.2-8.6a.45.45 0 000-.82L2.4 2.58a.45.45 0 00-.63.5l1.6 6.36c.05.2.21.35.41.38l9.9 1.36c.2.03.2.32 0 .35l-9.9 1.36c-.2.03-.36.18-.41.38l-1.6 6.36c-.1.38.28.7.63.53z"/></svg></button>
+      </div>
     </div>
   </div>
 
@@ -6666,6 +7003,16 @@ html.undr-ruota .screen { height: 100% !important; }
   </div>
 </div>
 <!-- RITAGLIO DELLA FOTO PROFILO: trascina, ingrandisci, poi salva -->
+<div id="chiedi-modal">
+  <div class="crop-sheet">
+    <div class="crop-tit" id="chiedi-tit"></div>
+    <div class="chiedi-testo" id="chiedi-testo"></div>
+    <div class="crop-btns">
+      <button class="crop-annulla" id="chiedi-no">ANNULLA</button>
+      <button class="crop-ok" id="chiedi-si">OK</button>
+    </div>
+  </div>
+</div>
 <div id="crop-modal">
   <div class="crop-sheet">
     <div class="crop-tit">SISTEMA LA FOTO</div>

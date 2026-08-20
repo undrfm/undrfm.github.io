@@ -6555,6 +6555,28 @@ html.undr-ruota .screen { height: 100% !important; }
    Uno strato promosso a tutto schermo sotto elementi non promossi è una fonte
    nota di sfarfallio nella WebView. Rimesso com'era: l'aurora si tocca solo se
    serve davvero, e per ora non serve. */
+
+/* ── AVVISO A SCOMPARSA SU COMPUTER ──────────────────────────────
+   Sul telefono l'avviso e' largo quanto il campo "incolla o cerca" e sta
+   sopra di lui: giusto. Su computer no, e per una collisione fra due regole:
+   quella per le finestre larghe lo centra con transform: translateX(-50%),
+   ma questo blocco (che viene dopo e usa !important) gli rimette left/right
+   a 14px. Restava lo spostamento del -50% senza il left: 50% che lo
+   giustificava, e l'avviso finiva centrato sul bordo sinistro dello schermo:
+   misurato da -612 a 640 px, cioe' meta' fuori dalla finestra. Da qui la
+   sensazione di "lunghissimo e tagliato".
+   Qui lo riporto sopra il campo "incolla o cerca", con la stessa larghezza:
+   la colonna della coda e' minmax(340px, 430px) e il campo dentro misura 397. */
+@media (min-width: 900px) {
+  #toast {
+    left: 16px !important;
+    right: auto !important;
+    width: calc(100vw - 32px) !important;
+    max-width: 397px !important;
+    transform: translateY(16px) !important;
+  }
+  #toast.show { transform: translateY(0) !important; }
+}
 </style>
 </head>
 <body>

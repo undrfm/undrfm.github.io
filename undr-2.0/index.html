@@ -3870,7 +3870,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '21ago-a';
+var VERSIONE_UNDR = '21ago-b';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -8412,7 +8412,21 @@ function _inTv() {
             getComputedStyle(tv).display !== 'none');
 }
 var _orientStato = 'mai calcolato';
+// Su iPhone questa rotazione NON si applica, e il motivo e' che si sommava a
+// un'altra. Su Android la finestra e' bloccata in verticale dal manifesto:
+// girando il telefono non ruota niente, ed e' l'app a ruotare il solo video di
+// 90 gradi per farlo riempire lo schermo. Su iPhone quel blocco non esiste, la
+// PAGINA ruota gia' da sola, e i 90 gradi dell'app si sommavano: un elemento a
+// schermo intero, fisso e trasformato, che manda in crisi la composizione di
+// iOS. Da qui lo sfarfallio entrando in TV di lato, e il blocco al ritorno
+// sulla playlist.
+// Li' il pieno schermo lo fa YouTube stesso: l'iframe ha gia' allowfullscreen,
+// e il suo tasto gestisce rotazione e schermo intero in modo nativo.
+var _iOSqui = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
 function _tvPienoSchermo(acceso) {
+  if (_iOSqui) return;
   if (document.body.classList.contains('tv-orizz') === acceso) return;
   document.body.classList.toggle('tv-orizz', acceso);
   _orientStato = acceso ? 'TV a pieno schermo' : 'vista normale';

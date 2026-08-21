@@ -3870,11 +3870,57 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '21ago-b';
+var VERSIONE_UNDR = '21ago-c';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
 });
+
+// ═════ INTERRUTTORI DI PROVA (solo con ?diag=1) ═════════════════
+// Su iPhone la playlist sfarfalla e non riesco a riprodurlo con pagine di
+// prova: sfondo, video, copertina che gira e immagini da internet, tutti
+// esclusi uno per uno. Questi interruttori spengono un pezzo alla volta
+// DENTRO l'app vera. Ognuno toglie soltanto: senza ?diag=1 non compare nulla
+// e il comportamento e' identico.
+if (/[?&]diag=1/.test(location.search)) {
+  document.addEventListener('DOMContentLoaded', function () {
+    var voci = [
+      ['p-sfondo', 'SFONDO'],
+      ['p-anim',   'ANIMAZIONI'],
+      ['p-disco',  'DISCO CHE GIRA'],
+      ['p-ombre',  'ALONI'],
+      ['p-foto',   'COPERTINE']
+    ];
+    var p = document.createElement('div');
+    p.id = 'pannello-prova';
+    var misura = document.createElement('div');
+    misura.className = 'fps';
+    voci.forEach(function (v) {
+      var b = document.createElement('button');
+      b.textContent = v[1];
+      b.onclick = function () {
+        var ora = document.body.classList.toggle(v[0]);
+        b.classList.toggle('spento', ora);
+        b.textContent = ora ? (v[1] + ' OFF') : v[1];
+        azzera();
+      };
+      p.appendChild(b);
+    });
+    p.appendChild(misura);
+    document.body.appendChild(p);
+
+    var frame = 0, inizio = performance.now(), peggiore = 0, ultimo = inizio;
+    function azzera() { frame = 0; inizio = performance.now(); peggiore = 0; ultimo = inizio; }
+    (function giro() {
+      var o = performance.now(), salto = o - ultimo;
+      if (frame > 5 && salto > peggiore) peggiore = salto;
+      ultimo = o; frame++;
+      var sec = (o - inizio) / 1000;
+      if (sec > 0.8) misura.textContent = (frame / sec).toFixed(0) + ' al secondo · scatto peggiore ' + peggiore.toFixed(0) + ' ms';
+      requestAnimationFrame(giro);
+    }());
+  });
+}
 // ── SECURITY: sanitize color to safe hex only ──
 function sanitizeColor(c) {
   if (typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c)) return c;
@@ -6855,6 +6901,34 @@ html.undr-ruota .screen { height: 100% !important; }
    risolvere la memoria video dell'ANDROID (294 MB, l'app veniva uccisa), un
    problema che su iPhone non si e' mai presentato. Il disegno e' lo stesso,
    cambia solo come viene messo insieme. */
+/* ── INTERRUTTORI DI PROVA ──────────────────────────────────
+   Si vedono SOLO aprendo l'app con ?diag=1 in fondo all'indirizzo. Servono a
+   trovare cosa fa sfarfallare la playlist su iPhone: si spegne una cosa alla
+   volta finche' lo sfarfallio non sparisce. Ognuno TOGLIE soltanto, quindi non
+   puo' rompere niente; senza ?diag=1 l'app e' identica a prima. */
+body.p-sfondo .aurora, body.p-sfondo .blob, body.p-sfondo #sfondo-tela { display: none !important; }
+body.p-anim *, body.p-anim *::before, body.p-anim *::after {
+  animation: none !important; transition: none !important;
+}
+body.p-disco .queue-item.current .qi-thumb {
+  animation: none !important; box-shadow: none !important;
+}
+body.p-ombre * { box-shadow: none !important; text-shadow: none !important; }
+body.p-foto .qi-thumb, body.p-foto .nph-img { visibility: hidden !important; }
+
+#pannello-prova {
+  position: fixed; left: 8px; right: 8px; bottom: calc(78px + var(--safe-bottom, 0px));
+  z-index: 13000; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+  background: rgba(7,6,10,0.92); border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 14px; padding: 8px;
+}
+#pannello-prova button {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;
+  padding: 7px 9px; border-radius: 12px; cursor: pointer;
+  background: rgba(255,255,255,0.07); color: #efeaf7; border: 1px solid rgba(255,255,255,0.32);
+}
+#pannello-prova button.spento { background: #ff4d4d; color: #07060a; border-color: #ff4d4d; font-weight: 700; }
+#pannello-prova .fps { width: 100%; text-align: center; font-size: 10px; color: var(--accent); }
 body.sfondo-css .aurora, body.sfondo-css .blob { display: block !important; }
 body.sfondo-css #sfondo-tela { display: none !important; }
 #sfondo-tela {

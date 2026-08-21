@@ -3321,14 +3321,30 @@ function addSystemMsg(text) {
   }, AVVISO_DURATA);
 }
 
+// Mette in sicurezza un testo per l'HTML. E' IDEMPOTENTE: prima disfa le
+// entita' gia' presenti, poi protegge una volta sola. Serve perche' lo stesso
+// testo passa di qui piu' volte — all'arrivo via P2P, di nuovo al ripristino
+// della coda salvata, e i nomi in chat a ogni rimbalzo. Proteggendo due volte,
+// l'apostrofo di "L'enfant sauvage" diventava &amp;#39; e si leggeva a schermo
+// come L&#39;enfant sauvage.
+// Resta sicuro: la protezione viene applicata DOPO, quindi nessun < > " ' &
+// puo' sopravvivere in chiaro.
 function escHtml(s) {
   if (typeof s !== 'string') s = String(s || '');
+  s = unescHtml(s);
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
-// inverso di escHtml: ridà i caratteri reali da entità HTML (', ", &, <, >)
+// Inverso di escHtml. Ripete finche' il testo non cambia piu', cosi' guarisce
+// anche quello protetto piu' volte dalle versioni precedenti (&amp;amp;#39;).
 function unescHtml(s) {
   if (typeof s !== 'string') s = String(s || '');
-  return s.replace(/&#0*39;/g, "'").replace(/&#x27;/gi, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  for (var giro = 0; giro < 5; giro++) {
+    var prima = s;
+    s = s.replace(/&#0*39;/g, "'").replace(/&#x27;/gi, "'").replace(/&quot;/g, '"')
+         .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    if (s === prima) break;
+  }
+  return s;
 }
 
 // ── Titoli puliti: via "(Official Video)", "[4K Remaster]" ecc. e artista duplicato ──
@@ -6338,7 +6354,7 @@ html.undr-ruota .screen { height: 100% !important; }
 
     <div id="landing-ticker"><div>UNDR BROADCAST SYSTEM &nbsp;///&nbsp; P2P · NO SERVER · NO LOG &nbsp;///&nbsp; LA TUA CREW · LA TUA FREQUENZA &nbsp;///&nbsp; NESSUNO ASCOLTA TRANNE NOI &nbsp;///</div></div>
     <div style="text-align:center;margin-top:10px;">
-      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-token</span></div>
+      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-apostrofo</span></div>
     </div>
   </div>
 </div>

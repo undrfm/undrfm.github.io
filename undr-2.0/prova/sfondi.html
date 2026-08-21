@@ -1,0 +1,142 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UNDR — quale sfondo sfarfalla</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#07060a;color:#efeaf7;font-family:ui-monospace,'Courier New',monospace}
+  body{overflow:hidden}
+
+  /* ── A: sfocature CSS (quello di adesso su iPhone) ── */
+  .a-aurora{position:fixed;inset:-45%;z-index:0;opacity:.15;
+    background:conic-gradient(from 0deg,#c8f53a,#7b3af5,#3af5d0,#f53ab4,#f5a83a,#c8f53a);
+    filter:blur(110px);animation:giro 9s linear infinite}
+  .a-blob{position:fixed;border-radius:50%;filter:blur(85px);opacity:.45;z-index:0}
+  .a-blob.l{width:380px;height:380px;background:#c8f53a;top:-110px;right:-80px;animation:der 10s infinite alternate ease-in-out}
+  .a-blob.v{width:440px;height:440px;background:#7b3af5;bottom:-80px;left:-150px;animation:der 13s infinite alternate-reverse ease-in-out}
+  .a-blob.t{width:320px;height:320px;background:#3af5d0;top:38%;left:52%;opacity:.16;animation:der 16s infinite alternate ease-in-out}
+
+  /* ── B: stesse forme ma gia' sfocate in immagini, ZERO filtri ── */
+  .b-aurora{position:fixed;inset:-45%;z-index:0;opacity:.15;background-size:100% 100%;
+    background-repeat:no-repeat;animation:giro 9s linear infinite}
+  .b-blob{position:fixed;z-index:0;background-size:100% 100%;background-repeat:no-repeat}
+  .b-blob.l{width:890px;height:890px;opacity:.45;top:-365px;right:-335px;animation:der 10s infinite alternate ease-in-out}
+  .b-blob.v{width:950px;height:950px;opacity:.45;bottom:-335px;left:-405px;animation:der 13s infinite alternate-reverse ease-in-out}
+  .b-blob.t{width:830px;height:830px;opacity:.16;top:calc(38% - 255px);left:calc(52% - 255px);animation:der 16s infinite alternate ease-in-out}
+
+  /* ── C: sfumature morbide senza nessun filtro ne' immagine ── */
+  .c-strato{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .c-uno{background:radial-gradient(60% 45% at 78% 8%, rgba(200,245,58,.42), transparent 70%);
+         animation:der 10s infinite alternate ease-in-out}
+  .c-due{background:radial-gradient(65% 45% at 10% 92%, rgba(123,58,245,.45), transparent 70%);
+         animation:der 13s infinite alternate-reverse ease-in-out}
+  .c-tre{background:radial-gradient(45% 32% at 62% 46%, rgba(58,245,208,.18), transparent 70%);
+         animation:der 16s infinite alternate ease-in-out}
+
+  @keyframes giro{to{transform:rotate(360deg)}}
+  @keyframes der{from{transform:translate(0,0) scale(1)}to{transform:translate(34px,44px) scale(1.12)}}
+
+  .spento{display:none !important}
+
+  header{position:fixed;top:0;left:0;right:0;z-index:5;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 10px;
+         background:rgba(10,9,16,.55);border-bottom:1px solid rgba(255,255,255,.18);
+         display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
+  button{font:inherit;font-size:12px;letter-spacing:.1em;padding:9px 14px;border-radius:20px;cursor:pointer;
+         background:rgba(255,255,255,.06);color:#efeaf7;border:1px solid rgba(255,255,255,.32)}
+  button.scelto{background:#c8f53a;color:#07060a;border-color:#c8f53a;font-weight:700}
+  .lista{position:relative;z-index:2;padding:96px 14px 30px;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .riga{display:flex;align-items:center;gap:12px;margin-bottom:9px;padding:10px 12px;border-radius:16px;
+        background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.18)}
+  .cop{width:52px;height:52px;border-radius:50%;flex:none;
+       background:linear-gradient(135deg,#c8f53a,#7b3af5)}
+  .tit{font-family:system-ui,sans-serif;font-size:15px;font-weight:600}
+  .sot{font-size:11px;color:#9a92b0;letter-spacing:.06em}
+  .fps{position:fixed;bottom:calc(12px + env(safe-area-inset-bottom,0px));left:0;right:0;z-index:6;text-align:center;
+       font-size:12px;color:#c8f53a}
+</style>
+
+<div id="A">
+  <div class="a-aurora"></div><div class="a-blob l"></div><div class="a-blob v"></div><div class="a-blob t"></div>
+</div>
+<div id="B" class="spento">
+  <div class="b-aurora" id="b-au"></div><div class="b-blob l" id="b-l"></div>
+  <div class="b-blob v" id="b-v"></div><div class="b-blob t" id="b-t"></div>
+</div>
+<div id="C" class="spento">
+  <div class="c-strato c-uno"></div><div class="c-strato c-due"></div><div class="c-strato c-tre"></div>
+</div>
+
+<header>
+  <button id="bA" class="scelto" onclick="scegli('A')">A · sfocature</button>
+  <button id="bB" onclick="scegli('B')">B · immagini</button>
+  <button id="bC" onclick="scegli('C')">C · sfumature</button>
+</header>
+
+<div class="lista" id="lista"></div>
+<div class="fps" id="fps">…</div>
+
+<script>
+var l = document.getElementById('lista'), h = '';
+for (var i = 1; i <= 25; i++) {
+  h += '<div class="riga"><div class="cop"></div><div><div class="tit">traccia ' + i +
+       '</div><div class="sot">band ' + i + '</div></div></div>';
+}
+l.innerHTML = h;
+
+// le immagini per la modalita' B: sfumature radiali, nessun filtro richiesto
+function tondoImg(hex, R, S) {
+  var c = document.createElement('canvas'); c.width = c.height = 300;
+  var x = c.getContext('2d');
+  var n = parseInt(hex.slice(1), 16);
+  var rgb = ((n>>16)&255) + ',' + ((n>>8)&255) + ',' + (n&255);
+  var g = x.createRadialGradient(150,150,0,150,150,150);
+  for (var i = 0; i <= 24; i++) {
+    var p = i/24, d = p/2;
+    var t = (R - d)/(S*1.4142), seg = t < 0 ? -1 : 1; t = Math.abs(t);
+    var a = 1/(1+0.3275911*t);
+    var e = 1-(((((1.061405429*a-1.453152027)*a)+1.421413741)*a-0.284496736)*a+0.254829592)*a*Math.exp(-t*t);
+    g.addColorStop(p, 'rgba(' + rgb + ',' + (((1+seg*e)/2).toFixed(3)) + ')');
+  }
+  x.fillStyle = g; x.fillRect(0,0,300,300);
+  return c.toDataURL('image/png');
+}
+function auroraImg() {
+  var p = document.createElement('canvas'); p.width = 44; p.height = 90;
+  var q = p.getContext('2d'), g;
+  try { g = q.createConicGradient(0, 22, 45); } catch(e) { g = q.createLinearGradient(0,0,44,90); }
+  [[0,'#c8f53a'],[.2,'#7b3af5'],[.4,'#3af5d0'],[.6,'#f53ab4'],[.8,'#f5a83a'],[1,'#c8f53a']]
+    .forEach(function(s){ g.addColorStop(s[0], s[1]); });
+  q.fillStyle = g; q.fillRect(0,0,44,90);
+  var c = document.createElement('canvas'); c.width = 300; c.height = 620;
+  var x = c.getContext('2d'); x.imageSmoothingEnabled = true;
+  x.drawImage(p, 0, 0, 300, 620);
+  x.globalCompositeOperation = 'destination-in';
+  x.save(); x.translate(150,310); x.scale(1, 620/300);
+  var m = x.createRadialGradient(0,0,0,0,0,150);
+  m.addColorStop(0,'rgba(0,0,0,1)'); m.addColorStop(.45,'rgba(0,0,0,1)'); m.addColorStop(1,'rgba(0,0,0,0)');
+  x.fillStyle = m; x.fillRect(-150,-150,300,300); x.restore();
+  return c.toDataURL('image/png');
+}
+document.getElementById('b-au').style.backgroundImage = 'url(' + auroraImg() + ')';
+document.getElementById('b-l').style.backgroundImage  = 'url(' + tondoImg('#c8f53a', 380/890/2, 85/890) + ')';
+document.getElementById('b-v').style.backgroundImage  = 'url(' + tondoImg('#7b3af5', 440/950/2, 85/950) + ')';
+document.getElementById('b-t').style.backgroundImage  = 'url(' + tondoImg('#3af5d0', 320/830/2, 85/830) + ')';
+
+function scegli(q) {
+  ['A','B','C'].forEach(function(k){
+    document.getElementById(k).classList.toggle('spento', k !== q);
+    document.getElementById('b' + k).classList.toggle('scelto', k === q);
+  });
+  frame = 0; inizio = performance.now(); peggiore = 0; ultimo = inizio;
+}
+
+var frame = 0, inizio = performance.now(), peggiore = 0, ultimo = inizio;
+(function giro(){
+  var o = performance.now(), salto = o - ultimo;
+  if (frame > 5 && salto > peggiore) peggiore = salto;
+  ultimo = o; frame++;
+  var sec = (o - inizio)/1000;
+  if (sec > 0.8) document.getElementById('fps').textContent =
+    (frame/sec).toFixed(0) + ' fotogrammi al secondo · scatto peggiore ' + peggiore.toFixed(0) + ' ms';
+  requestAnimationFrame(giro);
+})();
+</script>

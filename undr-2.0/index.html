@@ -3865,6 +3865,16 @@ if (document.readyState === 'loading') {
 } else {
   _avviaSfondoTela();
 }
+
+// Contrassegno di versione. Serve a rispondere in un secondo alla domanda
+// "quale versione sta girando su questo telefono?": una PWA installata puo'
+// tenersi una copia vecchia in cache, e senza questo si finisce a cercare
+// difetti gia' corretti.
+var VERSIONE_UNDR = '21ago-a';
+document.addEventListener('DOMContentLoaded', function () {
+  var e = document.getElementById('segno-versione');
+  if (e) e.textContent = VERSIONE_UNDR;
+});
 // ── SECURITY: sanitize color to safe hex only ──
 function sanitizeColor(c) {
   if (typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c)) return c;
@@ -6977,7 +6987,7 @@ body.tv-orizz #sfondo-tela { display: none !important; }
 
     <div id="landing-ticker"><div>UNDR BROADCAST SYSTEM &nbsp;///&nbsp; P2P · NO SERVER · NO LOG &nbsp;///&nbsp; LA TUA CREW · LA TUA FREQUENZA &nbsp;///&nbsp; NESSUNO ASCOLTA TRANNE NOI &nbsp;///</div></div>
     <div style="text-align:center;margin-top:10px;">
-      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span></div>
+      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span id="segno-versione" style="opacity:.5;margin-left:8px"></span></div>
     </div>
   </div>
 </div>

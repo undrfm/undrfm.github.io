@@ -3555,6 +3555,14 @@ function _scriviRiga(t) {
 // La correzione va messa al sicuro, altrimenti basta che l'app venga chiusa
 // dal sistema e il lavoro e' da rifare. Una sola scrittura, sei secondi dopo
 // l'ultima correzione, cosi' trenta tracce fanno un salvataggio solo.
+//
+// NEL CLOUD scrive SOLO chi ha creato la crew. Nel cloud c'e' una copia sola e
+// chi scrive riscrive tutto: se un telefono appena entrato, con la coda ancora
+// a meta', salvasse da solo, quella copia mezza vuota diventerebbe la buona per
+// chi entra dopo. Chi ha creato la crew tiene la coda di riferimento, quindi
+// scrive lui. Gli altri salvano comunque sul proprio telefono, e i loro
+// contrassegni finiscono nel cloud alla prima traccia che qualcuno aggiunge o
+// toglie (quella strada esiste gia' e non e' toccata).
 var _timerSalvaArtisti = null;
 function _salvaCorrezioni() {
   clearTimeout(_timerSalvaArtisti);
@@ -3563,7 +3571,7 @@ function _salvaCorrezioni() {
       if (!roomCode || !queue.length) return;
       localStorage.setItem('undr-queue-' + roomCode.toUpperCase(),
         JSON.stringify({ queue: queue, currentIdx: currentIdx, updatedAt: Date.now() }));
-      ghSaveCrew(roomCode, queue, currentIdx);
+      if (isHost) ghSaveCrew(roomCode, queue, currentIdx);
     } catch (e) {}
   }, 6000);
 }
@@ -6673,7 +6681,7 @@ html.undr-ruota .screen { height: 100% !important; }
 
     <div id="landing-ticker"><div>UNDR BROADCAST SYSTEM &nbsp;///&nbsp; P2P · NO SERVER · NO LOG &nbsp;///&nbsp; LA TUA CREW · LA TUA FREQUENZA &nbsp;///&nbsp; NESSUNO ASCOLTA TRANNE NOI &nbsp;///</div></div>
     <div style="text-align:center;margin-top:10px;">
-      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-memoria+icona</span></div>
+      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-completa</span></div>
     </div>
   </div>
 </div>

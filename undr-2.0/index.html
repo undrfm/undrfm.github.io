@@ -3870,7 +3870,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '21ago-c';
+var VERSIONE_UNDR = '21ago-d';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -3882,8 +3882,25 @@ document.addEventListener('DOMContentLoaded', function () {
 // esclusi uno per uno. Questi interruttori spengono un pezzo alla volta
 // DENTRO l'app vera. Ognuno toglie soltanto: senza ?diag=1 non compare nulla
 // e il comportamento e' identico.
-if (/[?&]diag=1/.test(location.search)) {
-  document.addEventListener('DOMContentLoaded', function () {
+// Gli interruttori si possono anche accendere DALL'INDIRIZZO, gia' spenti in
+// partenza: serve quando l'app si blocca prima che si riesca a toccarli.
+//   ?spegni=anim            spegne le animazioni
+//   ?spegni=anim,aloni      piu' cose insieme, separate da virgola
+//   ?spegni=tutto           spegne tutto
+(function () {
+  var m = /[?&]spegni=([a-z,]+)/.exec(location.search);
+  if (!m) return;
+  var mappa = { sfondo:'p-sfondo', anim:'p-anim', disco:'p-disco', aloni:'p-ombre', foto:'p-foto' };
+  function applica() {
+    var chiesti = m[1].split(',');
+    if (chiesti.indexOf('tutto') >= 0) chiesti = Object.keys(mappa);
+    chiesti.forEach(function (k) { if (mappa[k]) document.body.classList.add(mappa[k]); });
+  }
+  if (document.body) applica();
+  else document.addEventListener('DOMContentLoaded', applica);
+}());
+
+if (/[?&]diag=1|[?&]spegni=/.test(location.search)) {  document.addEventListener('DOMContentLoaded', function () {
     var voci = [
       ['p-sfondo', 'SFONDO'],
       ['p-anim',   'ANIMAZIONI'],

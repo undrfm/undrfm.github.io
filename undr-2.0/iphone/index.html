@@ -163,7 +163,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 
 /* add bar */
 .add-song-bar { padding: 10px 16px; padding-bottom: calc(10px + var(--safe-bottom)); border-top: 1px solid var(--sep); flex-shrink: 0; background: var(--bg); }
-.add-row { display: flex; gap: 10px; align-items: center; }
+.add-row, .chat-row { display: flex; gap: 10px; align-items: center; }
 .add-row .input-field { flex: 1; font-size: 16px; padding: 14px 18px; border-radius: 24px; }
 .btn-add { background: var(--accent); color: #080808; border: none; border-radius: 24px; padding: 11px 20px; font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0.1em; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
 
@@ -5255,7 +5255,7 @@ body::before, body::after { display: none !important; }
 .like-burst { font-family: var(--mono); font-size: 10px; color: #b3abd0; }
 
 /* ── BARRA "INCOLLA LINK": pulsante DROP INTEGRATO dentro il campo arrotondato ── */
-.add-row { position: relative; display: block !important; }
+.add-row, .chat-row { position: relative; display: block !important; }
 .add-row .input-field {
   width: 100%; border-radius: 24px !important;
   padding: 14px 96px 14px 18px !important;
@@ -6003,8 +6003,12 @@ body::before, body::after { display: none !important; }
   top: 50% !important; bottom: auto !important;
   transform: translateY(-50%) !important;
 }
-#drop-btn  { right: 5px !important; }
-.send-btn  { right: 23px !important; }
+/* Tutti e due i tasti stanno dentro la riga del proprio campo, e la riga
+   finisce esattamente dove finisce il campo. Prima l'invio era agganciato
+   alla BARRA della chat, che oltre a essere 18 px piu' larga del campo porta
+   in fondo il riempimento dell'area sicura (la striscia del tasto home):
+   su iPhone il suo centro cadeva 17 px sotto il centro del campo. */
+#drop-btn, .send-btn  { right: 5px !important; }
 #drop-btn:active, .send-btn:active { transform: translateY(-50%) scale(0.93) !important; }
 
 /* pillola coda crew / la tua: icona + numero */
@@ -6323,7 +6327,7 @@ html.undr-ruota .screen { height: 100% !important; }
 
     <div id="landing-ticker"><div>UNDR BROADCAST SYSTEM &nbsp;///&nbsp; P2P · NO SERVER · NO LOG &nbsp;///&nbsp; LA TUA CREW · LA TUA FREQUENZA &nbsp;///&nbsp; NESSUNO ASCOLTA TRANNE NOI &nbsp;///</div></div>
     <div style="text-align:center;margin-top:10px;">
-      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-loop</span></div>
+      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-invia</span></div>
     </div>
   </div>
 </div>
@@ -6604,8 +6608,10 @@ html.undr-ruota .screen { height: 100% !important; }
     </div>
 
     <div class="chat-input-bar">
+      <div class="chat-row">
       <input class="input-field" id="chat-input" placeholder="messaggio..." onfocus="this.placeholder=''" onblur="this.placeholder='messaggio...'" maxlength="500" onkeydown="if(event.key==='Enter') sendChat()">
       <button class="send-btn" onclick="sendChat()" title="invia" aria-label="invia"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.4 20.6l19.2-8.6a.45.45 0 000-.82L2.4 2.58a.45.45 0 00-.63.5l1.6 6.36c.05.2.21.35.41.38l9.9 1.36c.2.03.2.32 0 .35l-9.9 1.36c-.2.03-.36.18-.41.38l-1.6 6.36c-.1.38.28.7.63.53z"/></svg></button>
+      </div>
     </div>
   </div>
 

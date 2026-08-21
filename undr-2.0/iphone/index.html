@@ -658,7 +658,7 @@ window.onYouTubeIframeAPIReady = function() {
         if (e.data === YT.PlayerState.ENDED) {
           stopYTTicker();
           stopProgress();
-          nextTrack();
+          _playNextAuto();   // fine automatica: passa dal freno
         }
         if (e.data === YT.PlayerState.PLAYING) {
           setAudioStatus('playing', getLang().playing || 'in riproduzione');
@@ -2191,6 +2191,7 @@ function toggleLoop() {
 let _shuffleEnabled = false;
 function toggleShuffle() {
   _shuffleEnabled = !_shuffleEnabled;
+  _shuffleFatte = [];   // si ricomincia il giro da capo
   const btn = document.getElementById('shuffle-btn');
   if (btn) {
     btn.classList.toggle('ctrl-on', _shuffleEnabled);
@@ -2227,23 +2228,53 @@ function removeSong(songId) {
   toast('track rimossa');
 }
 
+// La fine della STESSA traccia viene segnalata da quattro punti diversi:
+// l'evento della libreria ufficiale di YouTube, il messaggio grezzo
+// dell'iframe, il sorpasso del conta-tempo e il timer di riserva. Senza freno
+// avanzavano tutti nel giro di mezzo secondo: la coda saltava due o tre tracce
+// e l'iframe riceveva tre caricamenti di fila, che lo lasciano incollato alla
+// stessa canzone. Era il "loop e shuffle fanno come gli pare". Ora passa solo
+// il primo dei quattro.
+var _ultimoAvanzamento = 0;
+
+// Giro dello shuffle: una traccia gia' uscita non ricapita finche' non sono
+// uscite tutte. Prima si sorteggiava ogni volta sull'intera coda, ed e' il
+// motivo per cui la stessa canzone tornava piu' e piu' volte.
+var _shuffleFatte = [];
+
 function _playNextAuto() {
+  if (Date.now() - _ultimoAvanzamento < 1500) return;   // fine automatica: passa il primo
+  _avanzaTraccia();
+}
+
+function nextTrack() {
+  _avanzaTraccia();   // richiesta a mano: deve passare sempre
+}
+
+function _avanzaTraccia() {
   clearTimeout(_autoNextWatchdog);
   _autoNextWatchdog = null;
   // BLOCCO A PROVA DI BOMBA: se l'utente ha messo in pausa, non avanzare MAI.
   // (La fine-traccia vera passa da stopProgress che azzera _pausedAt, quindi lì si avanza.)
   if (_pausedAt && !_progressRunning) return;
   if (!queue.length) return;
+
   if (_shuffleEnabled) {
-    // Casuale — qualsiasi traccia tranne quella corrente
-    let nextIdx;
-    if (queue.length === 1) {
-      nextIdx = 0;
-    } else {
-      do { nextIdx = Math.floor(Math.random() * queue.length); }
-      while (nextIdx === currentIdx);
+    var attuale = queue[currentIdx];
+    if (attuale && _shuffleFatte.indexOf(attuale.id) < 0) _shuffleFatte.push(attuale.id);
+    var restanti = [];
+    for (var i = 0; i < queue.length; i++) {
+      if (i === currentIdx) continue;
+      if (_shuffleFatte.indexOf(queue[i].id) < 0) restanti.push(i);
     }
-    currentIdx = nextIdx;
+    if (!restanti.length) {
+      // giro completato: le ha suonate tutte
+      _shuffleFatte = [];
+      if (!_loopEnabled) { toast('coda finita'); return; }
+      for (var j = 0; j < queue.length; j++) if (j !== currentIdx) restanti.push(j);
+      if (!restanti.length) restanti.push(currentIdx);   // una sola traccia in coda
+    }
+    currentIdx = restanti[Math.floor(Math.random() * restanti.length)];
   } else if (currentIdx < queue.length - 1) {
     currentIdx++;
   } else if (_loopEnabled) {
@@ -2251,11 +2282,11 @@ function _playNextAuto() {
   } else {
     return;
   }
+  // Il freno si arma SOLO quando si suona davvero. Armandolo in cima, una
+  // chiamata che usciva subito (in pausa, coda vuota, fine coda) bruciava la
+  // finestra e bloccava quella buona che arrivava dopo.
+  _ultimoAvanzamento = Date.now();
   playTrack(currentIdx, true);
-}
-
-function nextTrack() {
-  _playNextAuto();
 }
 
 // ── AUDIO ENGINE ──
@@ -3013,7 +3044,7 @@ window.addEventListener('message', (e) => {
     // YouTube handled by YT Player API callbacks (onYouTubeIframeAPIReady)
     // Vimeo events
     if (e.origin.includes('vimeo.com')) {
-      if (data.event === 'finish') { console.log('[UNDR] Vimeo finish'); clearTimeout(_autoNextTimer); stopProgress(); nextTrack(); }
+      if (data.event === 'finish') { console.log('[UNDR] Vimeo finish'); clearTimeout(_autoNextTimer); stopProgress(); _playNextAuto(); }
       if (data.event === 'play') { setAudioStatus('playing', (getLang().playing||'in riproduzione') + ' · vimeo'); document.getElementById('audio-play-btn').textContent = '⏸'; _progressRunning = true; if (_pausedAt) { _progressStart = Date.now() - _pausedAt; _pausedAt = 0; } _setupAutoNextWatchdog(); if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'; }
       if (data.event === 'pause') { setAudioStatus('', getLang().paused || 'in pausa'); document.getElementById('audio-play-btn').textContent = '▶'; _progressRunning = false; _pausedAt = Date.now() - _progressStart; clearTimeout(_autoNextWatchdog); _autoNextWatchdog = null; if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'; }
       if (data.event === 'error') showAudioError();
@@ -6292,7 +6323,7 @@ html.undr-ruota .screen { height: 100% !important; }
 
     <div id="landing-ticker"><div>UNDR BROADCAST SYSTEM &nbsp;///&nbsp; P2P · NO SERVER · NO LOG &nbsp;///&nbsp; LA TUA CREW · LA TUA FREQUENZA &nbsp;///&nbsp; NESSUNO ASCOLTA TRANNE NOI &nbsp;///</div></div>
     <div style="text-align:center;margin-top:10px;">
-      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-base</span></div>
+      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-loop</span></div>
     </div>
   </div>
 </div>

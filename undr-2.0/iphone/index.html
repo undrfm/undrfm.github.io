@@ -4412,32 +4412,56 @@ document.addEventListener('click', (e) => {
 });
 
 // ── PWA INIT ──
-function generateIcon(size, radius) {
-  const c = document.createElement('canvas');
+// Unbounded, equalizzatore. Colori fissi come sull'APK, non del tema.
+//   modo 'piena'       tutto campo con angoli stondati (Android, uso normale)
+//   modo 'quadra'      tutto campo senza stondatura (iPhone la stonda da solo)
+//   modo 'ritagliabile' contenuto al 68%, per il ritaglio adattivo di Android
+function generateIcon(size, modo) {
+  var c = document.createElement('canvas');
   c.width = c.height = size;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#0a0a0a';
-  roundRect(ctx, 0, 0, size, size, radius);
-  ctx.fill();
-  // subtle accent glow bottom
-  const grd = ctx.createRadialGradient(size*0.5, size*0.85, 0, size*0.5, size*0.85, size*0.55);
-  grd.addColorStop(0, _col('--accent-alone2', 'rgba(200,245,58,0.35)'));
-  grd.addColorStop(1, 'transparent');
-  ctx.fillStyle = grd;
-  ctx.fillRect(0, 0, size, size);
-  // UN in white
-  const fs = size * 0.38;
-  ctx.font = `${fs}px 'Arial Black', Arial`;
+  var ctx = c.getContext('2d');
+  var u = size / 512;
+
+  if (modo === 'piena') {
+    var r = size * 0.22;
+    roundRect(ctx, 0, 0, size, size, r);
+    ctx.clip();
+  }
+
+  var g = ctx.createLinearGradient(0, 0, size, size);
+  g.addColorStop(0, '#1b1430'); g.addColorStop(1, '#07060b');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+
+  var l1 = ctx.createRadialGradient(size*0.18, size*0.14, 0, size*0.18, size*0.14, size*0.52);
+  l1.addColorStop(0, 'rgba(123,58,245,0.62)'); l1.addColorStop(1, 'rgba(123,58,245,0)');
+  ctx.fillStyle = l1; ctx.fillRect(0, 0, size, size);
+
+  var l2 = ctx.createRadialGradient(size*0.86, size*0.90, 0, size*0.86, size*0.90, size*0.52);
+  l2.addColorStop(0, 'rgba(200,245,58,0.34)'); l2.addColorStop(1, 'rgba(200,245,58,0)');
+  ctx.fillStyle = l2; ctx.fillRect(0, 0, size, size);
+
+  ctx.save();
+  ctx.translate(size/2, size/2);
+  if (modo === 'ritagliabile') ctx.scale(0.68, 0.68);
+  ctx.translate(-size/2, -size/2);
+  ctx.translate(0, -29 * u);
+
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#f0f0f0';
-  ctx.fillText('UN', size * 0.5, size * 0.42);
-  // DR in accent
-  ctx.fillStyle = _col('--accent', '#c8f53a');
-  ctx.fillText('DR', size * 0.5, size * 0.72);
-  // thin underline
-  ctx.fillStyle = _col('--accent', '#c8f53a');
-  ctx.fillRect(size*0.25, size*0.88, size*0.5, size*0.025);
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = '900 ' + (146 * u) + 'px Unbounded, "Arial Black", Arial';
+  ctx.fillStyle = '#f4f0fb';
+  ctx.fillText('UN', size/2, 243 * u);
+  ctx.fillStyle = '#c8f53a';
+  ctx.fillText('DR', size/2, 372 * u);
+
+  var barre = [[171,406,26],[209,392,40],[247,378,54],[285,396,36],[323,410,22]];
+  ctx.fillStyle = '#c8f53a';
+  for (var b = 0; b < barre.length; b++) {
+    var x = barre[b][0]*u, y = barre[b][1]*u, w = 26*u, h = barre[b][2]*u;
+    roundRect(ctx, x, y, w, h, Math.min(8*u, w/2, h/2));
+    ctx.fill();
+  }
+  ctx.restore();
   return c;
 }
 
@@ -4455,14 +4479,12 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function initPWA() {
-  // Draw splash icon
-  // splash rimosso
-
-  // Generate icons at multiple sizes
-  const icon192 = generateIcon(192, 40).toDataURL('image/png');
-  const icon512 = generateIcon(512, 100).toDataURL('image/png');
-  const icon180 = generateIcon(180, 38).toDataURL('image/png');
+function _creaIconePWA() {
+  const icon192 = generateIcon(192, 'piena').toDataURL('image/png');
+  const icon512 = generateIcon(512, 'piena').toDataURL('image/png');
+  const icon180 = generateIcon(180, 'quadra').toDataURL('image/png');
+  const mask192 = generateIcon(192, 'ritagliabile').toDataURL('image/png');
+  const mask512 = generateIcon(512, 'ritagliabile').toDataURL('image/png');
 
   // Apple touch icon
   document.getElementById('apple-icon').href = icon180;
@@ -4482,9 +4504,14 @@ function initPWA() {
     background_color: '#0a0a0a',
     theme_color: '#0a0a0a',
     categories: ['music', 'social'],
+    // 'any' e 'maskable' separate: la seconda tiene il disegno dentro la zona
+    // sicura, cosi' Android puo' ritagliarla a cerchio o a goccia senza
+    // mangiarsi la scritta. Prima erano lo stesso file per entrambi gli usi.
     icons: [
-      { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-      { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+      { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: mask192, sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+      { src: mask512, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
     ],
     screenshots: [],
     shortcuts: [
@@ -4493,6 +4520,24 @@ function initPWA() {
   };
   const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
   document.getElementById('pwa-manifest').href = URL.createObjectURL(blob);
+}
+
+function initPWA() {
+  // Draw splash icon
+  // splash rimosso
+
+  // Il logo usa Unbounded: se le icone si disegnano prima che il carattere sia
+  // pronto escono con un ripiego. Si aspetta, ma senza bloccare l'avvio.
+  // Qui si rifanno SOLO le icone: il service worker resta registrato una volta
+  // sola (nell'app principale invece viene registrato due volte).
+  try {
+    if (document.fonts && document.fonts.load) {
+      document.fonts.load('900 100px Unbounded').then(function () {
+        setTimeout(_creaIconePWA, 60);
+      }).catch(function () {});
+    }
+  } catch (e) {}
+  _creaIconePWA();
 
   // Register service worker (inline via blob)
   if ('serviceWorker' in navigator) {
@@ -6628,7 +6673,7 @@ html.undr-ruota .screen { height: 100% !important; }
 
     <div id="landing-ticker"><div>UNDR BROADCAST SYSTEM &nbsp;///&nbsp; P2P · NO SERVER · NO LOG &nbsp;///&nbsp; LA TUA CREW · LA TUA FREQUENZA &nbsp;///&nbsp; NESSUNO ASCOLTA TRANNE NOI &nbsp;///</div></div>
     <div style="text-align:center;margin-top:10px;">
-      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-memoria</span></div>
+      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-memoria+icona</span></div>
     </div>
   </div>
 </div>

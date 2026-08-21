@@ -12,7 +12,7 @@
 <meta name="msapplication-tap-highlight" content="no">
 <link rel="manifest" id="pwa-manifest">
 <link rel="apple-touch-icon" id="apple-icon">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://localhost tauri://localhost capacitor://localhost; script-src 'self' 'unsafe-inline' blob: https://cdn.jsdelivr.net https://www.youtube.com https://s.ytimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com https://i.vimeocdn.com; frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; media-src 'self' blob: data:; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; connect-src 'self' blob: https://localhost https://cebssqzlzvekytgzrqju.supabase.co https://soyvmntqgpydansubrdw.supabase.co https://noembed.com https://musicbrainz.org https://www.youtube.com https://y.com.sb https://invidious.jing.rocks https://inv.nadeko.net https://invidious.privacyredirect.com https://iv.melmac.space https://invidious.f5.si https://yt.artemislena.eu https://invidious.protokolla.fi https://invidious.nerdvpn.de wss://0.peerjs.com https://0.peerjs.com">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://localhost tauri://localhost capacitor://localhost; script-src 'self' 'unsafe-inline' blob: https://cdn.jsdelivr.net https://www.youtube.com https://s.ytimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com https://i.vimeocdn.com; frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; media-src 'self' blob: data:; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; connect-src 'self' blob: https://localhost https://cebssqzlzvekytgzrqju.supabase.co https://soyvmntqgpydansubrdw.supabase.co https://noembed.com https://www.youtube.com https://y.com.sb https://invidious.jing.rocks https://inv.nadeko.net https://invidious.privacyredirect.com https://iv.melmac.space https://invidious.f5.si https://yt.artemislena.eu https://invidious.protokolla.fi https://invidious.nerdvpn.de wss://0.peerjs.com https://0.peerjs.com">
 <title>UNDR</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap');
@@ -1933,7 +1933,6 @@ async function addSong() {
       song.author = meta.author;
       song.thumb = meta.thumb || '';
       song.duration = meta.duration || 0;
-      risolviArtista(song);
       // Se duration mancante, prova a recuperarla dalla pagina YouTube
       if (song.duration === 0 && parsed.source !== 'vimeo') {
         fetchYTDuration(parsed.id).then(dur => {
@@ -2008,7 +2007,6 @@ function _backfillMeta(s) {
       if (meta.title && (!t.title || /^(youtube|vimeo|track)\s*[·:]/i.test(t.title))) { t.title = meta.title; cambiato = true; }
       if (!t.thumb && meta.thumb) { t.thumb = meta.thumb; cambiato = true; }
       if (cambiato) { _npPinKey = ''; renderQueue(); }
-      risolviArtista(t);   // e ora chiedi chi e' DAVVERO l'artista
     }).catch(function() {});
   } catch(e) {}
 }
@@ -2128,7 +2126,6 @@ function onQueryInput(v) {
   if (f !== _queueFilter) { _queueFilter = f; renderQueue(); }
 }
 function renderQueue() {
-  let _daRisolvere = [];   // le richieste si raccolgono e partono DOPO il disegno
   updatePlSwitchCounts();
   _updateNpPin();
   const el = document.getElementById('queue-list');
@@ -2143,7 +2140,6 @@ function renderQueue() {
   el.innerHTML = queue.map((s, i) => {
     if (!_matchesFilter(s)) return '';
     _backfillMeta(s);   // tracce senza titolo/band: completale ora (una volta sola)
-    _daRisolvere.push(s);   // fuori dal ciclo: qui dentro NON si tocca la lista
     const c = cleanTitle(s);
     const saved = stashKeys[(s.source || 'youtube') + ':' + s.videoId];
     return `
@@ -2170,16 +2166,6 @@ function renderQueue() {
     _lastScrollIdx = currentIdx;
     const _cur = el.querySelector('.queue-item.current');
     if (_cur) setTimeout(function(){ try { _cur.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch(e) { _cur.scrollIntoView(); } }, 60);
-  }
-  // Le richieste sull'artista partono ORA, a lista gia' disegnata, e in un giro
-  // separato: se una risponde subito dalla memoria non puo' piu' far ripartire
-  // il disegno da dentro il disegno.
-  if (_daRisolvere.length) {
-    const _lista = _daRisolvere;
-    _daRisolvere = [];
-    setTimeout(function () {
-      for (var i = 0; i < _lista.length; i++) { try { risolviArtista(_lista[i]); } catch (e) {} }
-    }, 0);
   }
 }
 
@@ -3369,31 +3355,19 @@ const TITLE_FEAT_RE = /\s*[\(\[]?\s*(feat\.?|ft\.?|featuring)\s+[^\)\]]+[\)\]]?\
 // VINCOLO: in "song" deve restare SOLO il titolo della canzone — niente (Official Video), [4K], | canale, feat., ecc.
 function cleanTitle(s) {
   if (!s) return { artist: '', song: '' };
-  const _grezzo = unescHtml(s.author || '');
-  // "Artista - Topic" e i canali VEVO sono caricamenti ufficiali: li' il nome
-  // del canale E' l'artista, e va creduto piu' del titolo.
-  const _canaleUfficiale = /(\s*-\s*topic|vevo)\s*$/i.test(_grezzo);
-  let artist = _grezzo.replace(/\s*-\s*topic$/i, '').replace(/VEVO$/i, '').trim();
+  let artist = unescHtml(s.author || '').replace(/\s*-\s*topic$/i, '').replace(/VEVO$/i, '').trim();
   let t = unescHtml(s.title || '');
   t = t.replace(TITLE_JUNK_RE, '');          // blocchi (…)/[…]/{…} spazzatura
   t = t.replace(/\s*\|.*$/, '');             // tutto dopo una pipe (di solito il canale)
   t = t.replace(/\s{2,}/g, ' ').trim();
   // separa "Artista - Canzone" (o "Canzone - Artista") in modo robusto
-  // confronto tollerante: via accenti, maiuscole e punteggiatura
-  const _norm = function(x){
-    return (x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
-  };
+  const _norm = function(x){ return (x || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); };
   const _an = _norm(artist);
   const _m = t.match(/^(.{2,60}?)\s+[-–—:|·]\s+(.+)$/);
   if (_m) {
     const _left = _m[1].trim(), _right = _m[2].trim();
-    if (_an && _norm(_right) === _an) { artist = _right; t = _left; }   // "Canzone - Artista"
-    else if (_an && _norm(_left) === _an) { artist = _left; t = _right; } // canale = artista
-    else if (_canaleUfficiale) { t = _right; }                          // canale Topic/VEVO
-    // Canale generico (una raccolta, un ricaricatore): il nome vero sta nel
-    // titolo, non nel canale. Prima vinceva sempre il canale, ed e' il motivo
-    // per cui sotto il titolo compariva chi aveva caricato il video.
-    else { artist = _left; t = _right; }
+    if (_an && _norm(_right) === _an) { t = _left; }       // "Canzone - Artista"
+    else { if (!artist) artist = _left; t = _right; }       // "Artista - Canzone"
   }
   // VINCOLO finale: via "feat./ft. …" in coda, via suffissi "official video/audio/HD…", via virgolette/separatori
   let song = t.replace(TITLE_FEAT_RE, '');
@@ -3428,150 +3402,6 @@ function adattaCodiceCrew() {
   } catch (e) {}
 }
 window.addEventListener('resize', function () { setTimeout(adattaCodiceCrew, 60); });
-
-// ── ARTISTA VERO ─────────────────────────────────────────
-// Il nome che YouTube restituisce e' quello del CANALE: su un canale di
-// ricarica non e' l'artista, e a volte titolo e artista sono pure invertiti.
-// Lo chiedo a MusicBrainz: niente chiave, CORS aperto, ma UNA richiesta al
-// secondo (oltre risponde 503), quindi in fila e con le risposte in cache.
-var _mbCache = {};
-try { _mbCache = JSON.parse(localStorage.getItem('undr-artisti') || '{}'); } catch (e) { _mbCache = {}; }
-var _mbFila = Promise.resolve();
-var _mbChiesti = {};
-
-function _mbRicorda(chiave, esito) {
-  _mbCache[chiave] = esito;
-  try {
-    var k = Object.keys(_mbCache);
-    if (k.length > 400) { var t = {}; k.slice(-400).forEach(function (x) { t[x] = _mbCache[x]; }); _mbCache = t; }
-    localStorage.setItem('undr-artisti', JSON.stringify(_mbCache));
-  } catch (e) {}
-}
-
-function _mbCerca(query, limite, tentativo) {
-  _mbFila = _mbFila.then(function () { return new Promise(function (r) { setTimeout(r, 1200); }); });
-  return _mbFila.then(function () {
-    return fetch('https://musicbrainz.org/ws/2/recording?fmt=json&limit=' + (limite || 3) +
-                 '&query=' + encodeURIComponent(query), { signal: AbortSignal.timeout(9000) })
-      .then(function (r) {
-        // 503 = ho bussato troppo in fretta: un secondo tentativo piu' in la'
-        if (!r.ok) {
-          if (r.status === 503 && !tentativo) {
-            return new Promise(function (ok) { setTimeout(ok, 2500); })
-              .then(function () { return _mbCerca(query, limite, 1); });
-          }
-          return [];
-        }
-        return r.json().then(function (d) { return (d && d.recordings) || []; });
-      })
-      .catch(function () { return []; });
-  });
-}
-
-function _mbNome(rec) {
-  return (rec['artist-credit'] || []).map(function (a) { return a.name; }).join(', ');
-}
-
-function _mbCima(query) {
-  return _mbCerca(query, 3).then(function (recs) {
-    var t = recs[0];
-    if (!t) return null;
-    return { punteggio: t.score || 0, titolo: t.title || '', artista: _mbNome(t) };
-  });
-}
-
-// Su un titolo da solo decine di artisti fanno punteggio pieno: l'originale e
-// tutte le sue cover pesano uguale, e prendere il primo sbaglia ("Smells Like
-// Teen Spirit" tornava The Flying Pickets). Peso ogni artista con quante
-// pubblicazioni ha quel brano e accetto solo se stacca nettamente il secondo.
-// Su titoli comuni ("Creep") nessuno stacca: meglio non rispondere.
-function _mbPesa(recs) {
-  var peso = {};
-  for (var i = 0; i < recs.length; i++) {
-    var r = recs[i];
-    if ((r.score || 0) < 95) continue;
-    var nome = _mbNome(r);
-    if (!nome) continue;
-    if (!peso[nome]) peso[nome] = { pubbl: 0, titolo: r.title || '' };
-    peso[nome].pubbl += ((r.releases || []).length || 1);
-  }
-  var lista = Object.keys(peso).map(function (n) {
-    return { artista: n, pubbl: peso[n].pubbl, titolo: peso[n].titolo };
-  }).sort(function (a, b) { return b.pubbl - a.pubbl; });
-  if (!lista.length) return null;
-  var primo = lista[0], secondo = lista[1];
-  if (primo.pubbl < 5) return null;
-  if (secondo && primo.pubbl < secondo.pubbl * 2) return null;
-  return { artista: primo.artista, titolo: primo.titolo };
-}
-
-// MAI renderQueue() da qui: renderQueue chiama risolviArtista dentro il ciclo
-// che costruisce la lista, e rispondere subito dalla cache faceva ripartire il
-// disegno da dentro il disegno — 31 ridisegni annidati su 30 tracce, a ogni
-// aggiornamento. Il ridisegno e' uno solo e differito.
-var _ridisegnoChiesto = false;
-function _chiediRidisegno() {
-  if (_ridisegnoChiesto) return;
-  _ridisegnoChiesto = true;
-  setTimeout(function () {
-    _ridisegnoChiesto = false;
-    try { renderQueue(); } catch (e) {}
-  }, 0);
-}
-
-function _applicaArtista(s, esito) {
-  if (!esito || !esito.artista) return;
-  var t = queue.find(function (x) {
-    return x.videoId === s.videoId && (x.source || 'youtube') === (s.source || 'youtube');
-  }) || s;
-  t.author = String(esito.artista).slice(0, 50);
-  if (esito.titolo) t.title = String(esito.titolo).slice(0, 80);
-  t.artistaOk = 1;
-  try { _npPinKey = ''; } catch (e) {}
-  _chiediRidisegno();
-}
-
-function risolviArtista(s) {
-  try {
-    if (!s || !s.videoId || s.artistaOk) return;
-    // canale ufficiale: il nome e' gia' quello giusto
-    if (/(\s*-\s*topic|vevo)\s*$/i.test(unescHtml(s.author || ''))) return;
-    var chiave = (s.source || 'youtube') + ':' + s.videoId;
-    if (_mbCache[chiave]) { _applicaArtista(s, _mbCache[chiave]); return; }
-    if (_mbChiesti[chiave]) return;
-    _mbChiesti[chiave] = 1;
-
-    var c = cleanTitle(s);
-    var sin = (c.artist || '').trim(), des = (c.song || '').trim();
-    if (!des) return;
-
-    var lavoro;
-    if (sin && des) {
-      // le due direzioni: quella giusta fa 100, quella sbagliata 0
-      lavoro = Promise.all([
-        _mbCima('artist:"' + sin + '" AND recording:"' + des + '"'),
-        _mbCima('artist:"' + des + '" AND recording:"' + sin + '"')
-      ]).then(function (r) {
-        var dritto = r[0], rovescio = r[1];
-        var pd = dritto ? dritto.punteggio : 0, pr = rovescio ? rovescio.punteggio : 0;
-        if (pd >= 90 && pd >= pr) return { artista: dritto.artista, titolo: dritto.titolo };
-        if (pr >= 90) return { artista: rovescio.artista, titolo: rovescio.titolo };
-        return null;
-      });
-    } else {
-      lavoro = Promise.resolve(null);
-    }
-
-    lavoro.then(function (esito) {
-      if (esito) return esito;
-      return _mbCerca('recording:"' + des + '"', 100).then(_mbPesa);
-    }).then(function (esito) {
-      if (!esito || !esito.artista) return;
-      _mbRicorda(chiave, esito);
-      _applicaArtista(s, esito);
-    }).catch(function () {});
-  } catch (e) {}
-}
 // ── SECURITY: sanitize color to safe hex only ──
 function sanitizeColor(c) {
   if (typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c)) return c;
@@ -3596,9 +3426,7 @@ function sanitizeSong(s) {
     addedBy: escHtml((s.addedBy || 'anon').toString().slice(0, 30)),
     votes: typeof s.votes === 'number' ? Math.max(0, Math.floor(s.votes)) : 0,
     duration: typeof s.duration === 'number' ? Math.max(0, Math.floor(s.duration)) : 0,
-    voters: Array.isArray(s.voters) ? s.voters.slice(0,500).filter(v => typeof v === 'string' && v.length < 100 && /^[A-Za-z0-9_-]+$/.test(v)) : [],
-    // gia' verificato da chi l'ha aggiunta: gli altri non richiedono nulla
-    artistaOk: s.artistaOk ? 1 : 0
+    voters: Array.isArray(s.voters) ? s.voters.slice(0,500).filter(v => typeof v === 'string' && v.length < 100 && /^[A-Za-z0-9_-]+$/.test(v)) : []
   };
 }
 
@@ -6569,7 +6397,7 @@ html.undr-ruota .screen { height: 100% !important; }
 
     <div id="landing-ticker"><div>UNDR BROADCAST SYSTEM &nbsp;///&nbsp; P2P · NO SERVER · NO LOG &nbsp;///&nbsp; LA TUA CREW · LA TUA FREQUENZA &nbsp;///&nbsp; NESSUNO ASCOLTA TRANNE NOI &nbsp;///</div></div>
     <div style="text-align:center;margin-top:10px;">
-      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-artista</span></div>
+      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-pillola</span></div>
     </div>
   </div>
 </div>

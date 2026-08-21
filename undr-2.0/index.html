@@ -1864,7 +1864,11 @@ function compactQueueForCloud(q) {
   return q.slice(0, 200).map(s => ({
     id: s.id, videoId: s.videoId, source: s.source || 'youtube',
     title: s.title, author: s.author || '', thumb: s.thumb || '',
-    duration: s.duration || 0, votes: s.votes || 0, voters: [], addedBy: ''
+    duration: s.duration || 0, votes: s.votes || 0, voters: [], addedBy: '',
+    // il contrassegno "artista gia' verificato" DEVE andare nel cloud: senza,
+    // a ogni ingresso in crew la coda tornava indietro senza memoria e si
+    // rifaceva il lavoro su tutte le tracce, una per una
+    artistaOk: s.artistaOk ? 1 : 0
   }));
 }
 
@@ -2095,7 +2099,18 @@ function _backfillMeta(s) {
       if (!t.author && meta.author) { t.author = meta.author; cambiato = true; }
       if (meta.title && (!t.title || /^(youtube|vimeo|track)\s*[·:]/i.test(t.title))) { t.title = meta.title; cambiato = true; }
       if (!t.thumb && meta.thumb) { t.thumb = meta.thumb; cambiato = true; }
-      if (cambiato) { _npPinKey = ''; renderQueue(); }
+      // come sopra: si riscrive quella riga, non si rifa' la lista intera
+      if (cambiato) {
+        _scriviRiga(t);
+        try {
+          var _im = document.querySelector('.queue-item[data-id="' +
+            ((window.CSS && CSS.escape) ? CSS.escape(t.id) : String(t.id).replace(/[^a-zA-Z0-9]/g, '')) +
+            '"] img.qi-thumb');
+          var _u = trackThumb(t);
+          if (_im && _u && _im.getAttribute('src') !== _u) _im.setAttribute('src', _u);
+        } catch (e) {}
+        try { if (queue[currentIdx] === t) { _npPinKey = ''; _updateNpPin(); } } catch (e) {}
+      }
       risolviArtista(t);   // e ora chiedi chi e' DAVVERO l'artista
     }).catch(function() {});
   } catch(e) {}
@@ -3579,37 +3594,82 @@ function _mbPesa(recs) {
   return { artista: primo.artista, titolo: primo.titolo };
 }
 
+// MAI renderQueue() da qui. renderQueue rifa' la lista con innerHTML: ogni
+// copertina viene distrutta e ricreata. Le risposte di MusicBrainz arrivano
+// una alla volta (la fila aspetta 1,2 s fra una domanda e l'altra), quindi
+// era UNA ricostruzione completa per ogni risposta, per minuti. Misurato su
+// 30 tracce: 30 ricostruzioni e 900 copertine buttate e ricreate. Su Safari
+// l'immagine ricreata si ridisegna partendo dal vuoto ed e' lo sfarfallio che
+// bloccava il PWA iPhone; su Chrome non si vede ma il lavoro sprecato c'e'.
+// Qui si riscrivono soltanto le due righe di testo di QUELLA riga: la
+// copertina non si tocca, quindi non c'e' niente da ridisegnare.
+// (Lo stesso ragionamento e' gia' scritto dentro _updateNpPin per la card
+//  "ora in onda" - alla lista non era mai stato applicato.)
+// La raccolta differita dentro renderQueue (_daRisolvere) resta com'e': serve
+// a non far ripartire il disegno da dentro il disegno.
+function _scriviRiga(t) {
+  try {
+    var lista = document.getElementById('queue-list');
+    if (!lista || !t || !t.id) return;
+    var chiave = (window.CSS && CSS.escape) ? CSS.escape(t.id) : String(t.id).replace(/[^a-zA-Z0-9]/g, '');
+    var riga = lista.querySelector('.queue-item[data-id="' + chiave + '"]');
+    if (!riga) return;   // non e' a schermo (filtro attivo, vista stash): niente da fare
+    var info = riga.querySelector('.qi-info');
+    if (!info) return;
+    var c = cleanTitle(t);
+    var tit = info.querySelector('.qi-title');
+    if (tit) tit.textContent = unescHtml(c.song);
+    var art = info.querySelector('.qi-artist');
+    if (c.artist) {
+      if (!art) { art = document.createElement('div'); art.className = 'qi-artist'; info.appendChild(art); }
+      art.textContent = unescHtml(c.artist);
+    } else if (art) {
+      art.parentNode.removeChild(art);
+    }
+  } catch (e) {}
+}
+
+// La correzione va messa al sicuro, altrimenti basta che l'app venga chiusa
+// dal sistema e il lavoro e' da rifare. Una sola scrittura, sei secondi dopo
+// l'ultima correzione, cosi' trenta tracce fanno un salvataggio solo.
+//
+// NEL CLOUD scrive SOLO chi ha creato la crew. Nel cloud c'e' una copia sola e
+// chi scrive riscrive tutto: se un telefono appena entrato, con la coda ancora
+// a meta', salvasse da solo, quella copia mezza vuota diventerebbe la buona per
+// chi entra dopo. Chi ha creato la crew tiene la coda di riferimento, quindi
+// scrive lui. Gli altri salvano comunque sul proprio telefono, e i loro
+// contrassegni finiscono nel cloud alla prima traccia che qualcuno aggiunge o
+// toglie (quella strada esiste gia' e non e' toccata).
+var _timerSalvaArtisti = null;
+function _salvaCorrezioni() {
+  clearTimeout(_timerSalvaArtisti);
+  _timerSalvaArtisti = setTimeout(function () {
+    try {
+      if (!roomCode || !queue.length) return;
+      localStorage.setItem('undr-queue-' + roomCode.toUpperCase(),
+        JSON.stringify({ queue: queue, currentIdx: currentIdx, updatedAt: Date.now() }));
+      if (isHost) ghSaveCrew(roomCode, queue, currentIdx);
+    } catch (e) {}
+  }, 6000);
+}
+
 function _applicaArtista(s, esito) {
   if (!esito || !esito.artista) return;
   var t = queue.find(function (x) {
     return x.videoId === s.videoId && (x.source || 'youtube') === (s.source || 'youtube');
   }) || s;
+  if (t.artistaOk) return;   // gia' sistemata: non si tocca mai piu'
   // scrivo artista e canzone gia' separati: cosi' non resta piu' niente da
   // indovinare, e il dato giusto viaggia anche verso gli altri della crew
   t.author = String(esito.artista).slice(0, 50);
   if (esito.titolo) t.title = String(esito.titolo).slice(0, 80);
   t.artistaOk = 1;
-  try { _npPinKey = ''; } catch (e) {}
-  _chiediRidisegno();   // MAI renderQueue() da qui: vedi sotto
-}
-
-// renderQueue chiama risolviArtista DENTRO il ciclo che costruisce la lista.
-// Se l'artista e' gia' in memoria, _applicaArtista rispondeva subito e
-// richiamava renderQueue mentre il primo stava ancora girando: una coda di N
-// tracce faceva N ridisegni annidati, ognuno a ricostruire l'intera lista.
-// Si innescava solo dalla seconda sessione in poi, quando la memoria degli
-// artisti e' piena — ed e' il motivo per cui il processo che disegna la pagina
-// saliva a 1,6 GB e il sistema uccideva l'app.
-// Ora il ridisegno e' UNO SOLO e differito: le richieste che arrivano insieme
-// si fondono in un unico disegno al giro successivo.
-var _ridisegnoChiesto = false;
-function _chiediRidisegno() {
-  if (_ridisegnoChiesto) return;
-  _ridisegnoChiesto = true;
-  setTimeout(function () {
-    _ridisegnoChiesto = false;
-    try { renderQueue(); } catch (e) {}
-  }, 0);
+  _scriviRiga(t);
+  // la card "ora in onda" si rifa' solo se la traccia corretta e' proprio quella
+  try {
+    if (queue[currentIdx] === t) { _npPinKey = ''; _updateNpPin(); }
+  } catch (e) {}
+  _salvaCorrezioni();
 }
 
 function risolviArtista(s) {
@@ -3648,7 +3708,12 @@ function risolviArtista(s) {
       // nessuna coppia convincente: provo col solo titolo, pesando i risultati
       return _mbCerca('recording:"' + des + '"', 100).then(_mbPesa);
     }).then(function (esito) {
-      if (!esito || !esito.artista) return;
+      if (!esito || !esito.artista) {
+        // "non la conosco" e' una risposta anche lei: si ricorda, cosi' la
+        // traccia non viene ripresentata a MusicBrainz a ogni sessione
+        _mbRicorda(chiave, { artista: '' });
+        return;
+      }
       _mbRicorda(chiave, esito);
       _applicaArtista(s, esito);
     }).catch(function () {});
@@ -3870,7 +3935,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '21ago-d';
+var VERSIONE_UNDR = '21ago-e';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;

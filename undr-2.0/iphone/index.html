@@ -1597,6 +1597,7 @@ function showRoom() {
   const cb = document.getElementById('copyright-bar'); if (cb) cb.style.display = 'none';
   const lockIcon = crewPasswordHash ? ' ' : '';
   document.getElementById('room-code-display').textContent = roomCode + lockIcon; var ptc = document.getElementById('player-tb-crew-code'); if (ptc) ptc.textContent = roomCode + lockIcon;
+  setTimeout(adattaCodiceCrew, 30);   // codice lungo: rimpicciolisci finche' ci sta
   // Don't set peers[myPeerId] here — myPeerId not set yet for joinRoom
   // It gets set in peer.on('open')
   renderPeers();
@@ -3375,6 +3376,32 @@ function cleanTitle(s) {
   return { artist, song: song || t || (s.title || '') };
 }
 
+
+// Il codice crew puo' essere lungo (quelli generati sono di 8 caratteri, uno
+// scelto a mano arriva a 10). Invece di imporre un limite — che romperebbe i
+// codici gia' in giro — il carattere si rimpicciolisce quanto basta.
+function adattaCodiceCrew() {
+  try {
+    var el = document.getElementById('room-code-display');
+    if (!el || !el.offsetParent) return;
+    // lo spazio vero e' quello di .room-code-wrap: il genitore immediato e' un
+    // contenitore senza classe che si allarga col testo e mentirebbe
+    var contenitore = el.closest('.room-code-wrap') || el.parentElement;
+    if (!contenitore) return;
+    var massimo = 19, minimo = 10;
+    // il tema impone font-size: 19px !important, e uno stile scritto da qui
+    // perderebbe: va messo con la stessa forza
+    el.style.setProperty('font-size', massimo + 'px', 'important');
+    var spazio = contenitore.clientWidth;
+    if (!spazio) return;
+    var misura = massimo;
+    while (misura > minimo && el.scrollWidth > spazio) {
+      misura -= 0.5;
+      el.style.setProperty('font-size', misura + 'px', 'important');
+    }
+  } catch (e) {}
+}
+window.addEventListener('resize', function () { setTimeout(adattaCodiceCrew, 60); });
 // ── SECURITY: sanitize color to safe hex only ──
 function sanitizeColor(c) {
   if (typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c)) return c;
@@ -5169,6 +5196,22 @@ body::before, body::after { display: none !important; }
   font-size: 19px !important; letter-spacing: 0.04em !important;
   color: #f2eff9 !important; text-shadow: none !important;
 }
+
+/* ── CODICE CREW LUNGO: LA PILLOLA "ONLINE" NON SI SPOSTA PIU' ──────────
+   .room-code-wrap ha flex: 1, ma un elemento flessibile non si restringe sotto
+   la larghezza del proprio contenuto: un codice lungo allargava il riquadro e
+   spingeva via tutto. Su schermo da 375 px la pillola passava da 142 a 305 e
+   l'avatar usciva dallo schermo. Fra il codice e .room-code-wrap c'e' anche un
+   contenitore senza classe che si allargava col testo: deve stringersi anche
+   lui. Il carattere lo rimpicciolisce adattaCodiceCrew. */
+.room-code-wrap { min-width: 0 !important; }
+.room-code-wrap > * { min-width: 0 !important; max-width: 100% !important; }
+#room-code-display {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  display: block !important;
+}
 .on-air {
   border: 1px solid var(--accent-alone2, rgba(200,245,58,0.35)) !important; border-radius: 20px !important;
   padding: 6px 12px !important; background: rgba(255,255,255,0.03) !important;
@@ -6354,7 +6397,7 @@ html.undr-ruota .screen { height: 100% !important; }
 
     <div id="landing-ticker"><div>UNDR BROADCAST SYSTEM &nbsp;///&nbsp; P2P · NO SERVER · NO LOG &nbsp;///&nbsp; LA TUA CREW · LA TUA FREQUENZA &nbsp;///&nbsp; NESSUNO ASCOLTA TRANNE NOI &nbsp;///</div></div>
     <div style="text-align:center;margin-top:10px;">
-      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-apostrofo</span></div>
+      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-pillola</span></div>
     </div>
   </div>
 </div>

@@ -1420,8 +1420,28 @@ function _submitGuard() {
   return true;
 }
 
+
+// Uscire da una crew ripulisce tutto, ma ENTRARE in una crew nuova non
+// ripuliva niente — e l'app rientra da sola nell'ultima crew all'avvio.
+// Restavano appesi: il vecchio collegamento, i membri di prima (fantasmi che
+// risultano online e non ci sono) e soprattutto trustedHostPeer, che se punta
+// a un ospite sparito senza avvisare fa RIFIUTARE IN SILENZIO ogni STATE del
+// nuovo ospite: chi entra non vede ne' la coda ne' i membri, e agli altri
+// sembra presente. La coda non si tocca: la ripristina restoreSavedQueue.
+function _pulisciSessioneP2P() {
+  try { Object.values(connections).forEach(function (c) { try { c.close(); } catch (e) {} }); } catch (e) {}
+  try { if (peer) peer.destroy(); } catch (e) {}
+  try { releaseRelaySlot(); } catch (e) {}
+  peer = null;
+  connections = {};
+  peers = {};
+  trustedHostPeer = null;
+  try { for (var k in chatRateMap) delete chatRateMap[k]; } catch (e) {}
+  try { for (var k2 in songRateMap) delete songRateMap[k2]; } catch (e) {}
+}
 async function createRoom(preHash, isAuto) {
   if (!_submitGuard()) return;
+  _pulisciSessioneP2P();
   const rawName = document.getElementById('username-input').value.trim();
   const aliasCheck = validateAlias(rawName);
   if (!aliasCheck.ok) { showAliasError(aliasCheck.reason); return; }
@@ -1497,8 +1517,48 @@ async function createRoom(preHash, isAuto) {
   });
 }
 
+
+// Domanda si'/no con il vestito dell'app (niente confirm() di sistema).
+// Il testo entra come testo puro: il codice crew lo scrive l'utente.
+function chiediConferma(titolo, testo, etichettaSi, etichettaNo) {
+  return new Promise(function (risolvi) {
+    var m = document.getElementById('chiedi-modal');
+    if (!m) { risolvi(false); return; }
+    document.getElementById('chiedi-tit').textContent = titolo;
+    document.getElementById('chiedi-testo').textContent = testo;
+    var si = document.getElementById('chiedi-si');
+    var no = document.getElementById('chiedi-no');
+    si.textContent = etichettaSi || 'OK';
+    no.textContent = etichettaNo || 'ANNULLA';
+    function chiudi(esito) {
+      m.classList.remove('aperto');
+      si.onclick = null; no.onclick = null; m.onclick = null;
+      risolvi(esito);
+    }
+    si.onclick = function () { chiudi(true); };
+    no.onclick = function () { chiudi(false); };
+    m.onclick = function (e) { if (e.target === m) chiudi(false); };
+    m.classList.add('aperto');
+  });
+}
+
+// "la crew non esiste" e "il cloud non risponde" sono due cose diverse:
+// confonderle bloccherebbe l'ingresso ogni volta che si e' offline.
+async function crewEsiste(code, hash) {
+  try {
+    const resp = await fetch(SB_URL + '/rest/v1/rpc/undr_get_crew', {
+      method: 'POST',
+      headers: sbHeaders(),
+      body: JSON.stringify({ p_code: (code || '').toUpperCase(), p_hash: hash || '' }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!resp.ok) return 'boh';
+    return (await resp.json()) ? 'si' : 'no';
+  } catch (e) { return 'boh'; }
+}
 async function joinRoom(preHash, isAuto) {
   if (!_submitGuard()) return;
+  _pulisciSessioneP2P();
   const rawName = document.getElementById('username-input').value.trim();
   const aliasCheck = validateAlias(rawName);
   if (!aliasCheck.ok) { showAliasError(aliasCheck.reason); return; }
@@ -1525,6 +1585,30 @@ async function joinRoom(preHash, isAuto) {
     toast('⚠ crew protetta — password errata o mancante');
     crewPasswordHash = '';
     return;
+  }
+
+  // ── LA CREW ESISTE DAVVERO? ──
+  // Il controllo password risponde "via libera" anche per un codice che non
+  // esiste (nessuna password = nessun divieto), quindi bastava sbagliare una
+  // lettera per finire dentro una crew fantasma vuota. Ora si chiede.
+  // Solo all'ingresso manuale: nel rientro automatico l'accesso era gia' buono.
+  if (!isAuto) {
+    const _esiste = await crewEsiste(roomCode, pwdHash);
+    if (_esiste === 'no') {
+      if (roomCode.length < 5) {
+        // le crew nuove vogliono almeno 5 caratteri: inutile proporre di aprirla
+        toast('nessuna crew con il codice ' + roomCode);
+        crewPasswordHash = '';
+        return;
+      }
+      const _vuoi = await chiediConferma(
+        'CREW NON TROVATA',
+        'Nessuna crew con il codice ' + roomCode + '.\nVuoi aprirla tu adesso?',
+        'APRI LA CREW', 'ANNULLA');
+      if (!_vuoi) { crewPasswordHash = ''; return; }
+      _submitLock = 0;   // il blocco anti doppio invio l'ha gia' consumato ENTRA
+      return createRoom(preHash, isAuto);
+    }
   }
 
   // ── STEP 1: Enter room immediately — no host required ──
@@ -1559,6 +1643,10 @@ async function joinRoom(preHash, isAuto) {
       setupConn(conn);
 
       const joinTimeout = setTimeout(() => {
+        // il tentativo scaduto va chiuso: lasciandolo aperto si accumulavano
+        // collegamenti a meta' verso la stessa crew, e il primo che si apriva
+        // in ritardo faceva ripartire un HELLO fuori tempo
+        try { conn.close(); } catch (e) {}
         if (_joinAttempt < _targets.length) {
           tryConnect();
         } else {
@@ -2186,9 +2274,9 @@ function renderQueue() {
     const _cur = el.querySelector('.queue-item.current');
     if (_cur) setTimeout(function(){ try { _cur.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch(e) { _cur.scrollIntoView(); } }, 60);
   }
-  // Le richieste sull'artista partono ORA, a lista gia' disegnata, e in un giro
-  // separato: se una risponde subito dalla memoria non puo' piu' far ripartire
-  // il disegno da dentro il disegno.
+  // Le richieste sull'artista partono ORA, a lista gia' disegnata, e in un
+  // giro separato: se una risponde subito dalla memoria non puo' piu' far
+  // ripartire il disegno da dentro il disegno.
   if (_daRisolvere.length) {
     const _lista = _daRisolvere;
     _daRisolvere = [];
@@ -2266,8 +2354,8 @@ function removeSong(songId) {
 // dell'iframe, il sorpasso del conta-tempo e il timer di riserva. Senza freno
 // avanzavano tutti nel giro di mezzo secondo: la coda saltava due o tre tracce
 // e l'iframe riceveva tre caricamenti di fila, che lo lasciano incollato alla
-// stessa canzone. Era il "loop e shuffle fanno come gli pare". Ora passa solo
-// il primo dei quattro.
+// stessa canzone. Era il "loop e shuffle fanno come gli pare" che peggiorava
+// finche' non si chiudeva l'app. Ora passa solo il primo dei quattro.
 var _ultimoAvanzamento = 0;
 
 // Giro dello shuffle: una traccia gia' uscita non ricapita finche' non sono
@@ -2315,9 +2403,10 @@ function _avanzaTraccia() {
   } else {
     return;
   }
-  // Il freno si arma SOLO quando si suona davvero. Armandolo in cima, una
-  // chiamata che usciva subito (in pausa, coda vuota, fine coda) bruciava la
-  // finestra e bloccava quella buona che arrivava dopo.
+  // Il freno si arma SOLO quando si suona davvero. Prima veniva armato in
+  // cima: se la chiamata usciva subito (in pausa, coda vuota, fine coda), si
+  // bruciava la finestra di 1,5 s e la chiamata BUONA che arrivava dopo
+  // restava bloccata — niente traccia successiva e niente effetto neve.
   _ultimoAvanzamento = Date.now();
   playTrack(currentIdx, true);
 }
@@ -3353,10 +3442,10 @@ function addSystemMsg(text) {
 
 // Mette in sicurezza un testo per l'HTML. E' IDEMPOTENTE: prima disfa le
 // entita' gia' presenti, poi protegge una volta sola. Serve perche' lo stesso
-// testo passa di qui piu' volte — all'arrivo via P2P, di nuovo al ripristino
-// della coda salvata, e i nomi in chat a ogni rimbalzo. Proteggendo due volte,
-// l'apostrofo di "L'enfant sauvage" diventava &amp;#39; e si leggeva a schermo
-// come L&#39;enfant sauvage.
+// testo passa di qui piu' volte — sanitizeSong all'arrivo via P2P, di nuovo al
+// ripristino dalla copia salvata, e i nomi in chat a ogni rimbalzo nella rete.
+// Proteggendo due volte l'apostrofo di "L'enfant sauvage" diventava &amp;#39; e
+// si leggeva a schermo come L&#39;enfant sauvage.
 // Resta sicuro: la protezione viene applicata DOPO, quindi nessun < > " ' &
 // puo' sopravvivere in chiaro.
 function escHtml(s) {
@@ -3364,8 +3453,9 @@ function escHtml(s) {
   s = unescHtml(s);
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
-// Inverso di escHtml. Ripete finche' il testo non cambia piu', cosi' guarisce
-// anche quello protetto piu' volte dalle versioni precedenti (&amp;amp;#39;).
+// Inverso di escHtml: rida' i caratteri reali (', ", &, <, >). Ripete finche'
+// il testo non cambia piu', cosi' guarisce anche quello protetto piu' volte
+// dalle versioni precedenti (&amp;amp;#39; e simili).
 function unescHtml(s) {
   if (typeof s !== 'string') s = String(s || '');
   for (var giro = 0; giro < 5; giro++) {
@@ -3403,8 +3493,8 @@ function cleanTitle(s) {
   if (_m) {
     const _left = _m[1].trim(), _right = _m[2].trim();
     if (_an && _norm(_right) === _an) { artist = _right; t = _left; }   // "Canzone - Artista"
-    else if (_an && _norm(_left) === _an) { artist = _left; t = _right; } // canale = artista
-    else if (_canaleUfficiale) { t = _right; }                          // canale Topic/VEVO
+    else if (_an && _norm(_left) === _an) { artist = _left; t = _right; } // "Artista - Canzone", canale = artista
+    else if (_canaleUfficiale) { t = _right; }                          // canale Topic/VEVO: e' davvero suo
     // Canale generico (una raccolta, un ricaricatore): il nome vero sta nel
     // titolo, non nel canale. Prima vinceva sempre il canale, ed e' il motivo
     // per cui sotto il titolo compariva chi aveva caricato il video.
@@ -3418,37 +3508,13 @@ function cleanTitle(s) {
 }
 
 
-// Il codice crew puo' essere lungo (quelli generati sono di 8 caratteri, uno
-// scelto a mano arriva a 10). Invece di imporre un limite — che romperebbe i
-// codici gia' in giro — il carattere si rimpicciolisce quanto basta.
-function adattaCodiceCrew() {
-  try {
-    var el = document.getElementById('room-code-display');
-    if (!el || !el.offsetParent) return;
-    // lo spazio vero e' quello di .room-code-wrap: il genitore immediato e' un
-    // contenitore senza classe che si allarga col testo e mentirebbe
-    var contenitore = el.closest('.room-code-wrap') || el.parentElement;
-    if (!contenitore) return;
-    var massimo = 19, minimo = 10;
-    // il tema impone font-size: 19px !important, e uno stile scritto da qui
-    // perderebbe: va messo con la stessa forza
-    el.style.setProperty('font-size', massimo + 'px', 'important');
-    var spazio = contenitore.clientWidth;
-    if (!spazio) return;
-    var misura = massimo;
-    while (misura > minimo && el.scrollWidth > spazio) {
-      misura -= 0.5;
-      el.style.setProperty('font-size', misura + 'px', 'important');
-    }
-  } catch (e) {}
-}
-window.addEventListener('resize', function () { setTimeout(adattaCodiceCrew, 60); });
-
 // ── ARTISTA VERO ─────────────────────────────────────────
-// Il nome che YouTube restituisce e' quello del CANALE: su un canale di
-// ricarica non e' l'artista, e a volte titolo e artista sono pure invertiti.
-// Lo chiedo a MusicBrainz: niente chiave, CORS aperto, ma UNA richiesta al
-// secondo (oltre risponde 503), quindi in fila e con le risposte in cache.
+// Il nome che YouTube restituisce e' quello del CANALE. Su un canale di
+// ricarica non e' l'artista, e a volte titolo e artista sono pure invertiti
+// ("ZITTI E BUONI - Maneskin"): dal solo testo non si capisce quale dei due
+// sia il gruppo. Lo chiedo a MusicBrainz, l'archivio musicale libero: niente
+// chiave, niente tracciamento, CORS aperto. Accetta UNA richiesta al secondo
+// (oltre risponde 503), quindi le metto in fila e ricordo le risposte.
 var _mbCache = {};
 try { _mbCache = JSON.parse(localStorage.getItem('undr-artisti') || '{}'); } catch (e) { _mbCache = {}; }
 var _mbFila = Promise.resolve();
@@ -3458,18 +3524,24 @@ function _mbRicorda(chiave, esito) {
   _mbCache[chiave] = esito;
   try {
     var k = Object.keys(_mbCache);
-    if (k.length > 400) { var t = {}; k.slice(-400).forEach(function (x) { t[x] = _mbCache[x]; }); _mbCache = t; }
+    if (k.length > 400) {
+      var t = {};
+      k.slice(-400).forEach(function (x) { t[x] = _mbCache[x]; });
+      _mbCache = t;
+    }
     localStorage.setItem('undr-artisti', JSON.stringify(_mbCache));
   } catch (e) {}
 }
 
 function _mbCerca(query, limite, tentativo) {
+  // ogni richiesta parte almeno 1,2 s dopo la precedente
   _mbFila = _mbFila.then(function () { return new Promise(function (r) { setTimeout(r, 1200); }); });
   return _mbFila.then(function () {
     return fetch('https://musicbrainz.org/ws/2/recording?fmt=json&limit=' + (limite || 3) +
                  '&query=' + encodeURIComponent(query), { signal: AbortSignal.timeout(9000) })
       .then(function (r) {
-        // 503 = ho bussato troppo in fretta: un secondo tentativo piu' in la'
+        // 503 = ho bussato troppo in fretta. Un secondo tentativo piu' in la',
+        // poi lascio perdere: sotto il titolo resta il nome del canale.
         if (!r.ok) {
           if (r.status === 503 && !tentativo) {
             return new Promise(function (ok) { setTimeout(ok, 2500); })
@@ -3496,10 +3568,12 @@ function _mbCima(query) {
 }
 
 // Su un titolo da solo decine di artisti fanno punteggio pieno: l'originale e
-// tutte le sue cover pesano uguale, e prendere il primo sbaglia ("Smells Like
-// Teen Spirit" tornava The Flying Pickets). Peso ogni artista con quante
-// pubblicazioni ha quel brano e accetto solo se stacca nettamente il secondo.
-// Su titoli comuni ("Creep") nessuno stacca: meglio non rispondere.
+// tutte le sue cover pesano uguale, e prendere il primo della lista sbaglia
+// ("Smells Like Teen Spirit" tornava The Flying Pickets). Peso ogni artista
+// con quante pubblicazioni ha quel brano — l'originale sta su decine di dischi,
+// la cover su uno — e accetto solo se stacca nettamente il secondo. Su titoli
+// molto comuni ("Creep", "Hallelujah") nessuno stacca: meglio non rispondere
+// che rispondere a caso.
 function _mbPesa(recs) {
   var peso = {};
   for (var i = 0; i < recs.length; i++) {
@@ -3523,13 +3597,16 @@ function _mbPesa(recs) {
 // MAI renderQueue() da qui. renderQueue rifa' la lista con innerHTML: ogni
 // copertina viene distrutta e ricreata. Le risposte di MusicBrainz arrivano
 // una alla volta (la fila aspetta 1,2 s fra una domanda e l'altra), quindi
-// era UNA ricostruzione completa per ogni risposta, per minuti. Su Safari
-// l'immagine ricreata si ridisegna partendo dal vuoto: e' lo sfarfallio delle
-// icone, e con trenta righe da rasterizzare ogni volta il PWA si piantava.
+// era UNA ricostruzione completa per ogni risposta, per minuti. Misurato su
+// 30 tracce: 30 ricostruzioni e 900 copertine buttate e ricreate. Su Safari
+// l'immagine ricreata si ridisegna partendo dal vuoto ed e' lo sfarfallio che
+// bloccava il PWA iPhone; su Chrome non si vede ma il lavoro sprecato c'e'.
 // Qui si riscrivono soltanto le due righe di testo di QUELLA riga: la
 // copertina non si tocca, quindi non c'e' niente da ridisegnare.
 // (Lo stesso ragionamento e' gia' scritto dentro _updateNpPin per la card
-//  "ora in onda" — alla lista non era mai stato applicato.)
+//  "ora in onda" - alla lista non era mai stato applicato.)
+// La raccolta differita dentro renderQueue (_daRisolvere) resta com'e': serve
+// a non far ripartire il disegno da dentro il disegno.
 function _scriviRiga(t) {
   try {
     var lista = document.getElementById('queue-list');
@@ -3582,6 +3659,8 @@ function _applicaArtista(s, esito) {
     return x.videoId === s.videoId && (x.source || 'youtube') === (s.source || 'youtube');
   }) || s;
   if (t.artistaOk) return;   // gia' sistemata: non si tocca mai piu'
+  // scrivo artista e canzone gia' separati: cosi' non resta piu' niente da
+  // indovinare, e il dato giusto viaggia anche verso gli altri della crew
   t.author = String(esito.artista).slice(0, 50);
   if (esito.titolo) t.title = String(esito.titolo).slice(0, 80);
   t.artistaOk = 1;
@@ -3596,7 +3675,7 @@ function _applicaArtista(s, esito) {
 function risolviArtista(s) {
   try {
     if (!s || !s.videoId || s.artistaOk) return;
-    // canale ufficiale: il nome e' gia' quello giusto
+    // canale ufficiale: il nome e' gia' quello giusto, non disturbo nessuno
     if (/(\s*-\s*topic|vevo)\s*$/i.test(unescHtml(s.author || ''))) return;
     var chiave = (s.source || 'youtube') + ':' + s.videoId;
     if (_mbCache[chiave]) { _applicaArtista(s, _mbCache[chiave]); return; }
@@ -3609,7 +3688,7 @@ function risolviArtista(s) {
 
     var lavoro;
     if (sin && des) {
-      // le due direzioni: quella giusta fa 100, quella sbagliata 0
+      // provo le due direzioni: quella giusta fa 100, quella sbagliata 0
       lavoro = Promise.all([
         _mbCima('artist:"' + sin + '" AND recording:"' + des + '"'),
         _mbCima('artist:"' + des + '" AND recording:"' + sin + '"')
@@ -3626,6 +3705,7 @@ function risolviArtista(s) {
 
     lavoro.then(function (esito) {
       if (esito) return esito;
+      // nessuna coppia convincente: provo col solo titolo, pesando i risultati
       return _mbCerca('recording:"' + des + '"', 100).then(_mbPesa);
     }).then(function (esito) {
       if (!esito || !esito.artista) {
@@ -3638,6 +3718,290 @@ function risolviArtista(s) {
       _applicaArtista(s, esito);
     }).catch(function () {});
   } catch (e) {}
+}
+
+// Il codice crew puo' essere lungo (i codici generati sono di 8 caratteri, e
+// uno scelto a mano puo' arrivare a 10). Invece di imporre un limite — che
+// romperebbe i codici gia' in giro e ridurrebbe le combinazioni da 850
+// miliardi a 887 milioni — il carattere si rimpicciolisce quanto basta.
+// Si parte dalla misura piena e si scende di mezzo punto per volta, fino a un
+// minimo leggibile: cosi' un codice corto resta grande come prima.
+function adattaCodiceCrew() {
+  try {
+    var el = document.getElementById('room-code-display');
+    if (!el || !el.offsetParent) return;
+    // lo spazio vero e' quello di .room-code-wrap: il genitore immediato e' un
+    // contenitore senza classe che si allarga col testo e mentirebbe
+    var contenitore = el.closest('.room-code-wrap') || el.parentElement;
+    if (!contenitore) return;
+    var massimo = 19, minimo = 10;
+    // il tema impone font-size: 19px !important, e uno stile scritto da qui
+    // perderebbe: va messo con la stessa forza, altrimenti la misura non cambia
+    // e il codice resta tagliato invece di rimpicciolirsi
+    el.style.setProperty('font-size', massimo + 'px', 'important');
+    var spazio = contenitore.clientWidth;
+    if (!spazio) return;
+    var misura = massimo;
+    while (misura > minimo && el.scrollWidth > spazio) {
+      misura -= 0.5;
+      el.style.setProperty('font-size', misura + 'px', 'important');
+    }
+  } catch (e) {}
+}
+window.addEventListener('resize', function () { setTimeout(adattaCodiceCrew, 60); });
+
+// ═════ SFONDO: STESSO DISEGNO, UNA SOLA TELA ═══════════════════════
+// Le quattro figure vengono sfocate UNA VOLTA in altrettante immagini, poi
+// disegnate su una tela grande quanto lo schermo. Prima erano quattro livelli
+// separati, ognuno con la sua texture: 294 MB di memoria video sul telefono,
+// che e' il motivo per cui il sistema uccideva l'app e ripartiva dal login.
+function _avviaSfondoTela() {
+  // iPhone e iPad: niente tela, si usano i quattro livelli CSS come prima.
+  // Vedi il commento nel foglio di stile: la' spiega il perche'.
+  var _melo = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (_melo) { document.body.classList.add('sfondo-css'); return; }
+  var tela = document.getElementById('sfondo-tela');
+  if (!tela || !tela.getContext) return;
+  var ctx = tela.getContext('2d');
+  var W = 0, H = 0, dpr = 1;
+
+  // ── le immagini gia' sfocate ──
+  // Safari vecchio dichiara ctx.filter ma non lo applica: qui si verifica sul
+  // serio disegnando due pixel e guardando se sbavano. Se non sbavano, la
+  // sfocatura si ottiene disegnando piccolo e reingrandendo, che e' morbido
+  // ovunque. Gli aloni non passano piu' di qui: sono sfumature radiali.
+  var _filtroBuono = (function () {
+    try {
+      var t = document.createElement('canvas'); t.width = t.height = 9;
+      var q = t.getContext('2d');
+      q.filter = 'blur(2px)';
+      q.fillStyle = '#fff'; q.fillRect(4, 4, 1, 1);
+      q.filter = 'none';
+      return q.getImageData(2, 4, 1, 1).data[3] > 0;   // sbava fin qui?
+    } catch (e) { return false; }
+  }());
+
+  function sfocata(larg, alt, raggio, disegna) {
+    var c = document.createElement('canvas');
+    c.width = larg; c.height = alt;
+    var x = c.getContext('2d');
+    if (raggio > 0 && !_filtroBuono) {
+      // niente sfocatura vera: disegno piccolo e reingrandisco
+      var f = Math.max(3, Math.round(larg / Math.max(2, raggio)));
+      var p = document.createElement('canvas');
+      p.width = Math.max(2, Math.round(larg / f));
+      p.height = Math.max(2, Math.round(alt / f));
+      disegna(p.getContext('2d'), p.width, p.height);
+      x.imageSmoothingEnabled = true;
+      x.drawImage(p, 0, 0, larg, alt);
+    } else {
+      if (raggio > 0) x.filter = 'blur(' + raggio + 'px)';
+      disegna(x, larg, alt);
+      x.filter = 'none';
+    }
+    // La sfocatura CSS sfuma anche FUORI dall'elemento e il suo bordo non si
+    // vede mai; dentro un'immagine il bordo e' netto e ruotando entrava nello
+    // schermo come un taglio diagonale. Qui il bordo si sfuma a mano, con una
+    // sfumatura schiacciata sulla forma del riquadro (una tonda lascerebbe i
+    // lati corti ancora netti).
+    x.globalCompositeOperation = 'destination-in';
+    x.save();
+    x.translate(larg / 2, alt / 2);
+    x.scale(1, alt / larg);
+    var g = x.createRadialGradient(0, 0, 0, 0, 0, larg / 2);
+    g.addColorStop(0, 'rgba(0,0,0,1)');
+    g.addColorStop(0.45, 'rgba(0,0,0,1)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = g;
+    x.fillRect(-larg / 2, -larg / 2, larg, larg);
+    x.restore();
+    x.globalCompositeOperation = 'source-over';
+    return c;
+  }
+
+  // Alone morbido SENZA sfocatura del canvas. Safari sulle versioni piu'
+  // vecchie ignora ctx.filter in silenzio: disegnava cerchi con il bordo duro,
+  // e sull'iPhone lo sfondo veniva fuori a dischi netti invece che sfumato.
+  // Una sfumatura radiale e' morbida per costruzione e funziona ovunque.
+  // I passaggi seguono il profilo vero di un cerchio sfocato: piatto al centro,
+  // poi una discesa a esse. R e' il raggio del cerchio, S quanto sfuma,
+  // tutt'e due in frazione della larghezza.
+  function tondo(colore, R_frazione, S_frazione) {
+    // canale alfa a esse: la stessa curva che darebbe una sfocatura gaussiana
+    function profilo(d) {
+      var t = (R_frazione - d) / (S_frazione * 1.4142);
+      // approssimazione della funzione errore, buona a sufficienza per un alone
+      var seg = t < 0 ? -1 : 1; t = Math.abs(t);
+      var a = 1 / (1 + 0.3275911 * t);
+      var e = 1 - (((((1.061405429 * a - 1.453152027) * a) + 1.421413741) * a - 0.284496736) * a + 0.254829592) * a * Math.exp(-t * t);
+      return (1 + seg * e) / 2;
+    }
+    return function (x, L, A) {
+      var g = x.createRadialGradient(L / 2, A / 2, 0, L / 2, A / 2, L / 2);
+      for (var i = 0; i <= 24; i++) {
+        var p = i / 24;
+        var alfa = Math.max(0, Math.min(1, profilo(p / 2)));   // p/2: frazione del RAGGIO
+        g.addColorStop(p, 'rgba(' + _rgb(colore) + ',' + alfa.toFixed(3) + ')');
+      }
+      x.fillStyle = g;
+      x.fillRect(0, 0, L, A);
+    };
+  }
+
+  function _rgb(hex) {
+    var n = parseInt(hex.slice(1), 16);
+    return ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255);
+  }
+
+  function conica(x, L, A) {
+    var g;
+    try { g = x.createConicGradient(0, L / 2, A / 2); }
+    catch (e) { g = x.createLinearGradient(0, 0, L, A); }
+    var fermate = [[0,'#c8f53a'],[0.2,'#7b3af5'],[0.4,'#3af5d0'],[0.6,'#f53ab4'],[0.8,'#f5a83a'],[1,'#c8f53a']];
+    for (var i = 0; i < fermate.length; i++) g.addColorStop(fermate[i][0], fermate[i][1]);
+    x.fillStyle = g;
+    x.fillRect(0, 0, L, A);
+  }
+
+  // Il cerchio pieno piu' la sfocatura si vede fin circa 3 volte il raggio di
+  // sfocatura oltre il bordo: 380 + 510 = 890, e cosi' per gli altri.
+  var imgAurora = sfocata(300, 620, 44, conica);
+  // raggio del cerchio e ampiezza della sfumatura, in frazione del riquadro:
+  // 380 di cerchio e 85 di sfocatura su 890 di riquadro, e cosi' per gli altri
+  var imgLime   = sfocata(300, 300, 0, tondo('#c8f53a', 380 / 890 / 2, 85 / 890));
+  var imgViola  = sfocata(300, 300, 0, tondo('#7b3af5', 440 / 950 / 2, 85 / 950));
+  var imgTeal   = sfocata(300, 300, 0, tondo('#3af5d0', 320 / 830 / 2, 85 / 830));
+
+  function misura() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    tela.width = Math.round(W * dpr);
+    tela.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  misura();
+  window.addEventListener('resize', function () { setTimeout(misura, 80); });
+
+  // alternate ease-in-out di CSS = un'oscillazione morbida di periodo doppio
+  function onda(t, periodo, alRovescio) {
+    var v = (1 - Math.cos(Math.PI * t / periodo)) / 2;
+    return alRovescio ? 1 - v : v;
+  }
+
+  var t0 = Date.now(), ultimo = 0;
+  function disegna() {
+    requestAnimationFrame(disegna);
+    if (document.hidden) return;               // schermo spento: niente lavoro
+    var ora = Date.now();
+    if (ora - ultimo < 33) return;             // 30 al secondo bastano: si muove piano
+    ultimo = ora;
+    var t = (ora - t0) / 1000;
+
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.save();
+    ctx.globalAlpha = 0.15;
+    ctx.translate(W / 2, H / 2);
+    ctx.rotate(t / 9 * Math.PI * 2);
+    ctx.drawImage(imgAurora, -W * 0.95, -H * 0.95, W * 1.9, H * 1.9);
+    ctx.restore();
+
+    alone(imgLime,  0.45, W - 110, 80,          890, 10, false, t);
+    alone(imgViola, 0.45, 70,      H - 140,     950, 13, true,  t);
+    alone(imgTeal,  0.16, W * 0.52 + 160, H * 0.38 + 160, 830, 16, false, t);
+  }
+
+  function alone(im, alfa, cx, cy, dim, periodo, alRovescio, t) {
+    var f = onda(t, periodo, alRovescio);
+    var d = dim * (1 + 0.22 * f);
+    ctx.save();
+    ctx.globalAlpha = alfa;
+    ctx.drawImage(im, cx + 34 * f - d / 2, cy + 44 * f - d / 2, d, d);
+    ctx.restore();
+  }
+
+  requestAnimationFrame(disegna);
+}
+// Questo blocco vive nello script che sta PRIMA del corpo della pagina:
+// all'esecuzione la tela non esiste ancora, quindi si aspetta che ci sia.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _avviaSfondoTela);
+} else {
+  _avviaSfondoTela();
+}
+
+// Contrassegno di versione. Serve a rispondere in un secondo alla domanda
+// "quale versione sta girando su questo telefono?": una PWA installata puo'
+// tenersi una copia vecchia in cache, e senza questo si finisce a cercare
+// difetti gia' corretti.
+var VERSIONE_UNDR = '21ago-e';
+document.addEventListener('DOMContentLoaded', function () {
+  var e = document.getElementById('segno-versione');
+  if (e) e.textContent = VERSIONE_UNDR;
+});
+
+// ═════ INTERRUTTORI DI PROVA (solo con ?diag=1) ═════════════════
+// Su iPhone la playlist sfarfalla e non riesco a riprodurlo con pagine di
+// prova: sfondo, video, copertina che gira e immagini da internet, tutti
+// esclusi uno per uno. Questi interruttori spengono un pezzo alla volta
+// DENTRO l'app vera. Ognuno toglie soltanto: senza ?diag=1 non compare nulla
+// e il comportamento e' identico.
+// Gli interruttori si possono anche accendere DALL'INDIRIZZO, gia' spenti in
+// partenza: serve quando l'app si blocca prima che si riesca a toccarli.
+//   ?spegni=anim            spegne le animazioni
+//   ?spegni=anim,aloni      piu' cose insieme, separate da virgola
+//   ?spegni=tutto           spegne tutto
+(function () {
+  var m = /[?&]spegni=([a-z,]+)/.exec(location.search);
+  if (!m) return;
+  var mappa = { sfondo:'p-sfondo', anim:'p-anim', disco:'p-disco', aloni:'p-ombre', foto:'p-foto' };
+  function applica() {
+    var chiesti = m[1].split(',');
+    if (chiesti.indexOf('tutto') >= 0) chiesti = Object.keys(mappa);
+    chiesti.forEach(function (k) { if (mappa[k]) document.body.classList.add(mappa[k]); });
+  }
+  if (document.body) applica();
+  else document.addEventListener('DOMContentLoaded', applica);
+}());
+
+if (/[?&]diag=1|[?&]spegni=/.test(location.search)) {  document.addEventListener('DOMContentLoaded', function () {
+    var voci = [
+      ['p-sfondo', 'SFONDO'],
+      ['p-anim',   'ANIMAZIONI'],
+      ['p-disco',  'DISCO CHE GIRA'],
+      ['p-ombre',  'ALONI'],
+      ['p-foto',   'COPERTINE']
+    ];
+    var p = document.createElement('div');
+    p.id = 'pannello-prova';
+    var misura = document.createElement('div');
+    misura.className = 'fps';
+    voci.forEach(function (v) {
+      var b = document.createElement('button');
+      b.textContent = v[1];
+      b.onclick = function () {
+        var ora = document.body.classList.toggle(v[0]);
+        b.classList.toggle('spento', ora);
+        b.textContent = ora ? (v[1] + ' OFF') : v[1];
+        azzera();
+      };
+      p.appendChild(b);
+    });
+    p.appendChild(misura);
+    document.body.appendChild(p);
+
+    var frame = 0, inizio = performance.now(), peggiore = 0, ultimo = inizio;
+    function azzera() { frame = 0; inizio = performance.now(); peggiore = 0; ultimo = inizio; }
+    (function giro() {
+      var o = performance.now(), salto = o - ultimo;
+      if (frame > 5 && salto > peggiore) peggiore = salto;
+      ultimo = o; frame++;
+      var sec = (o - inizio) / 1000;
+      if (sec > 0.8) misura.textContent = (frame / sec).toFixed(0) + ' al secondo · scatto peggiore ' + peggiore.toFixed(0) + ' ms';
+      requestAnimationFrame(giro);
+    }());
+  });
 }
 // ── SECURITY: sanitize color to safe hex only ──
 function sanitizeColor(c) {
@@ -4420,6 +4784,10 @@ document.addEventListener('click', (e) => {
 });
 
 // ── PWA INIT ──
+// Icona della PWA. Era disegnata qui col vecchio logo su fondo nero, del tutto
+// slegata dalle icone dell'app: per questo cambiando l'icona dell'APK quella
+// della schermata home restava la vecchia, sia su Android che su iPhone.
+// Ora e' lo stesso disegno: fondo club, luce viola e luce lime, UN/DR in
 // Unbounded, equalizzatore. Colori fissi come sull'APK, non del tema.
 //   modo 'piena'       tutto campo con angoli stondati (Android, uso normale)
 //   modo 'quadra'      tutto campo senza stondatura (iPhone la stonda da solo)
@@ -4472,7 +4840,6 @@ function generateIcon(size, modo) {
   ctx.restore();
   return c;
 }
-
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -4485,6 +4852,22 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.lineTo(x, y + r);
   ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
+}
+
+function initPWA() {
+  // Draw splash icon
+  // splash rimosso
+
+  // Il logo usa Unbounded: se le icone si disegnano prima che il carattere sia
+  // pronto escono con un ripiego. Si aspetta, ma senza bloccare l'avvio.
+  try {
+    if (document.fonts && document.fonts.load) {
+      document.fonts.load('900 100px Unbounded').then(function () {
+        setTimeout(_creaIconePWA, 60);
+      }).catch(function () {});
+    }
+  } catch (e) {}
+  _creaIconePWA();
 }
 
 function _creaIconePWA() {
@@ -4528,24 +4911,6 @@ function _creaIconePWA() {
   };
   const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
   document.getElementById('pwa-manifest').href = URL.createObjectURL(blob);
-}
-
-function initPWA() {
-  // Draw splash icon
-  // splash rimosso
-
-  // Il logo usa Unbounded: se le icone si disegnano prima che il carattere sia
-  // pronto escono con un ripiego. Si aspetta, ma senza bloccare l'avvio.
-  // Qui si rifanno SOLO le icone: il service worker resta registrato una volta
-  // sola (nell'app principale invece viene registrato due volte).
-  try {
-    if (document.fonts && document.fonts.load) {
-      document.fonts.load('900 100px Unbounded').then(function () {
-        setTimeout(_creaIconePWA, 60);
-      }).catch(function () {});
-    }
-  } catch (e) {}
-  _creaIconePWA();
 
   // Register service worker (inline via blob)
   if ('serviceWorker' in navigator) {
@@ -5480,22 +5845,6 @@ body::before, body::after { display: none !important; }
   font-size: 19px !important; letter-spacing: 0.04em !important;
   color: #f2eff9 !important; text-shadow: none !important;
 }
-
-/* ── CODICE CREW LUNGO: LA PILLOLA "ONLINE" NON SI SPOSTA PIU' ──────────
-   .room-code-wrap ha flex: 1, ma un elemento flessibile non si restringe sotto
-   la larghezza del proprio contenuto: un codice lungo allargava il riquadro e
-   spingeva via tutto. Su schermo da 375 px la pillola passava da 142 a 305 e
-   l'avatar usciva dallo schermo. Fra il codice e .room-code-wrap c'e' anche un
-   contenitore senza classe che si allargava col testo: deve stringersi anche
-   lui. Il carattere lo rimpicciolisce adattaCodiceCrew. */
-.room-code-wrap { min-width: 0 !important; }
-.room-code-wrap > * { min-width: 0 !important; max-width: 100% !important; }
-#room-code-display {
-  max-width: 100% !important;
-  overflow: hidden !important;
-  white-space: nowrap !important;
-  display: block !important;
-}
 .on-air {
   border: 1px solid var(--accent-alone2, rgba(200,245,58,0.35)) !important; border-radius: 20px !important;
   padding: 6px 12px !important; background: rgba(255,255,255,0.03) !important;
@@ -6088,6 +6437,19 @@ body::before, body::after { display: none !important; }
 .badge-icon.distintivo { background: none !important; border: none !important; }
 
 /* ══════════ RITAGLIO DELLA FOTO PROFILO ══════════ */
+
+/* finestra di conferma: stesso vestito del pannello ritaglio foto */
+#chiedi-modal {
+  display: none; position: fixed; inset: 0; z-index: 12100;
+  background: rgba(7,6,10,0.86);
+  align-items: center; justify-content: center; padding: 20px;
+}
+#chiedi-modal.aperto { display: flex; }
+.chiedi-testo {
+  font-family: var(--sans); font-size: 13.5px; line-height: 1.6;
+  color: rgba(236,232,245,0.86); white-space: pre-line;
+  margin: 12px 4px 16px;
+}
 #crop-modal {
   display: none; position: fixed; inset: 0; z-index: 12000;
   background: rgba(7,6,10,0.86);
@@ -6348,21 +6710,17 @@ body::before, body::after { display: none !important; }
    rimaste dal vecchio aspetto: top 15px per l'invio, top 5px per il drop.
    Con un'altezza fissa quei valori li spingevano più in basso del campo — ecco
    il disallineamento. Qui si centrano rispetto al campo, qualunque altezza abbia. */
-/* I due tasti sono ancorati a contenitori DIVERSI: il drop alla riga, che
-   finisce dove finisce il campo; l'invio alla barra, che è 18 px più larga del
-   campo per via del suo riempimento. Imporre lo stesso "right" a entrambi
-   faceva sporgere l'invio fuori dal campo. Valori separati, stesso risultato:
-   5 px di margine dal bordo del campo in tutti e due i casi. */
-#drop-btn, .send-btn {
-  top: 50% !important; bottom: auto !important;
-  transform: translateY(-50%) !important;
-}
 /* Tutti e due i tasti stanno dentro la riga del proprio campo, e la riga
    finisce esattamente dove finisce il campo. Prima l'invio era agganciato
    alla BARRA della chat, che oltre a essere 18 px piu' larga del campo porta
    in fondo il riempimento dell'area sicura (la striscia del tasto home):
-   su iPhone il suo centro cadeva 17 px sotto il centro del campo. */
-#drop-btn, .send-btn  { right: 5px !important; }
+   su iPhone il suo centro cadeva 17 px sotto il centro del campo. Con la riga
+   il problema non si pone proprio, e le due misure tornano identiche. */
+#drop-btn, .send-btn {
+  top: 50% !important; bottom: auto !important;
+  transform: translateY(-50%) !important;
+  right: 5px !important;
+}
 #drop-btn:active, .send-btn:active { transform: translateY(-50%) scale(0.93) !important; }
 
 /* pillola coda crew / la tua: icona + numero */
@@ -6588,11 +6946,115 @@ html.undr-ruota .screen { height: 100% !important; }
    Uno strato promosso a tutto schermo sotto elementi non promossi è una fonte
    nota di sfarfallio nella WebView. Rimesso com'era: l'aurora si tocca solo se
    serve davvero, e per ora non serve. */
+
+/* ── AVVISO A SCOMPARSA SU COMPUTER ──────────────────────────────
+   Sul telefono l'avviso e' largo quanto il campo "incolla o cerca" e sta
+   sopra di lui: giusto. Su computer no, e per una collisione fra due regole:
+   quella per le finestre larghe lo centra con transform: translateX(-50%),
+   ma questo blocco (che viene dopo e usa !important) gli rimette left/right
+   a 14px. Restava lo spostamento del -50% senza il left: 50% che lo
+   giustificava, e l'avviso finiva centrato sul bordo sinistro dello schermo:
+   misurato da -612 a 640 px, cioe' meta' fuori dalla finestra. Da qui la
+   sensazione di "lunghissimo e tagliato".
+   Qui lo riporto sopra il campo "incolla o cerca", con la stessa larghezza:
+   la colonna della coda e' minmax(340px, 430px) e il campo dentro misura 397. */
+
+/* ── SFONDO SU UNA SOLA TELA ─────────────────────────────────
+   Il disegno non cambia. Cambia quanta memoria video serve per tenerlo.
+   Misurato sul telefono (Redmi Note 8 Pro, 1080x2340 a densita' 2,75):
+   l'app ferma sulla schermata di login teneva 294 MB di texture sulla GPU.
+   Un'app normale ne usa 20-50. Quando il sistema ha bisogno di memoria
+   uccide il processo e l'app riparte dal login: il blocco che si vedeva.
+
+   Il motivo e' l'AREA dei livelli animati, non la sfocatura in se': l'aurora
+   e' larga il 190% dello schermo, cioe' 2054x4447 pixel reali, 36 MB per un
+   solo buffer — e una sfocatura ne vuole diversi, moltiplicati per quattro
+   livelli. Prova A/B in Chrome sullo stesso telefono: pagina vuota 3 MB,
+   sfondo a quattro livelli 183 MB, sfondo su una tela sola 53 MB.
+
+   Qui i quattro livelli spariscono e restano come riferimento delle misure;
+   al loro posto UNA tela grande quanto lo schermo, su cui vengono disegnate
+   le stesse figure, gia' sfocate una volta sola all'avvio. */
+.aurora, .blob { display: none !important; }
+/* Su iPhone la tela va TOLTA e si torna ai quattro livelli di prima.
+   Una tela che si ridipinge di continuo dietro tutta l'interfaccia costringe
+   Safari a ricomporre l'intera pagina a ogni fotogramma: le icone della
+   playlist sfarfallano e la PWA si inchioda del tutto. La tela serviva a
+   risolvere la memoria video dell'ANDROID (294 MB, l'app veniva uccisa), un
+   problema che su iPhone non si e' mai presentato. Il disegno e' lo stesso,
+   cambia solo come viene messo insieme. */
+/* ── INTERRUTTORI DI PROVA ──────────────────────────────────
+   Si vedono SOLO aprendo l'app con ?diag=1 in fondo all'indirizzo. Servono a
+   trovare cosa fa sfarfallare la playlist su iPhone: si spegne una cosa alla
+   volta finche' lo sfarfallio non sparisce. Ognuno TOGLIE soltanto, quindi non
+   puo' rompere niente; senza ?diag=1 l'app e' identica a prima. */
+body.p-sfondo .aurora, body.p-sfondo .blob, body.p-sfondo #sfondo-tela { display: none !important; }
+body.p-anim *, body.p-anim *::before, body.p-anim *::after {
+  animation: none !important; transition: none !important;
+}
+body.p-disco .queue-item.current .qi-thumb {
+  animation: none !important; box-shadow: none !important;
+}
+body.p-ombre * { box-shadow: none !important; text-shadow: none !important; }
+body.p-foto .qi-thumb, body.p-foto .nph-img { visibility: hidden !important; }
+
+#pannello-prova {
+  position: fixed; left: 8px; right: 8px; bottom: calc(78px + var(--safe-bottom, 0px));
+  z-index: 13000; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+  background: rgba(7,6,10,0.92); border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 14px; padding: 8px;
+}
+#pannello-prova button {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;
+  padding: 7px 9px; border-radius: 12px; cursor: pointer;
+  background: rgba(255,255,255,0.07); color: #efeaf7; border: 1px solid rgba(255,255,255,0.32);
+}
+#pannello-prova button.spento { background: #ff4d4d; color: #07060a; border-color: #ff4d4d; font-weight: 700; }
+#pannello-prova .fps { width: 100%; text-align: center; font-size: 10px; color: var(--accent); }
+body.sfondo-css .aurora, body.sfondo-css .blob { display: block !important; }
+body.sfondo-css #sfondo-tela { display: none !important; }
+#sfondo-tela {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  z-index: 0; pointer-events: none; display: block;
+}
+/* in TV orizzontale spariva lo sfondo: stessa regola di prima */
+body.tv-orizz #sfondo-tela { display: none !important; }
+/* ── CODICE CREW LUNGO: LA PILLOLA "ONLINE" NON SI SPOSTA PIU' ──────────
+   .room-code-wrap ha flex: 1, ma un elemento flessibile non si restringe
+   sotto la larghezza del proprio contenuto: un codice lungo allargava il
+   riquadro e spingeva via tutto il resto. Misurato su schermo da 375 px:
+   con "666" la pillola stava a 142, con un codice da 17 caratteri finiva a
+   305 e l'avatar usciva dallo schermo (396 su 375).
+   min-width: 0 toglie quel vincolo, cosi' il codice resta dentro la sua meta'
+   e la pillola non si muove piu'. Il carattere lo rimpicciolisce adattaCodiceCrew. */
+.room-code-wrap { min-width: 0 !important; }
+/* fra il codice e .room-code-wrap c'e' un contenitore senza classe che
+   si allargava col contenuto (285px invece dei 122 disponibili) e faceva
+   misurare male lo spazio: deve stringersi anche lui. */
+.room-code-wrap > * { min-width: 0 !important; max-width: 100% !important; }
+#room-code-display {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  display: block !important;
+}
+
+@media (min-width: 900px) {
+  #toast {
+    left: 16px !important;
+    right: auto !important;
+    width: calc(100vw - 32px) !important;
+    max-width: 397px !important;
+    transform: translateY(16px) !important;
+  }
+  #toast.show { transform: translateY(0) !important; }
+}
 </style>
 </head>
 <body>
 
 <!-- sfondo del tema (identico a UNDR FOR CREATOR) -->
+<canvas id="sfondo-tela"></canvas>
 <div class="aurora"></div>
 <div class="blob lime"></div>
 <div class="blob violet"></div>
@@ -6681,7 +7143,7 @@ html.undr-ruota .screen { height: 100% !important; }
 
     <div id="landing-ticker"><div>UNDR BROADCAST SYSTEM &nbsp;///&nbsp; P2P · NO SERVER · NO LOG &nbsp;///&nbsp; LA TUA CREW · LA TUA FREQUENZA &nbsp;///&nbsp; NESSUNO ASCOLTA TRANNE NOI &nbsp;///</div></div>
     <div style="text-align:center;margin-top:10px;">
-      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span style="opacity:.5;margin-left:8px">iphone-completa</span></div>
+      <div id="copyright-bar" style="display:none;margin-top:6px;"><span id="copyright-text">© 2026 UNDR</span><span id="segno-versione" style="opacity:.5;margin-left:8px"></span></div>
     </div>
   </div>
 </div>
@@ -7057,6 +7519,16 @@ html.undr-ruota .screen { height: 100% !important; }
   </div>
 </div>
 <!-- RITAGLIO DELLA FOTO PROFILO: trascina, ingrandisci, poi salva -->
+<div id="chiedi-modal">
+  <div class="crop-sheet">
+    <div class="crop-tit" id="chiedi-tit"></div>
+    <div class="chiedi-testo" id="chiedi-testo"></div>
+    <div class="crop-btns">
+      <button class="crop-annulla" id="chiedi-no">ANNULLA</button>
+      <button class="crop-ok" id="chiedi-si">OK</button>
+    </div>
+  </div>
+</div>
 <div id="crop-modal">
   <div class="crop-sheet">
     <div class="crop-tit">SISTEMA LA FOTO</div>
@@ -7113,17 +7585,35 @@ html.undr-ruota .screen { height: 100% !important; }
     var cv = el('canvas', 'position:absolute;inset:0;width:100%;height:100%;opacity:0;');
     bs.appendChild(cv);
     var nctx = cv.getContext('2d'), noiseOn = false;
+    // Due difetti che riempivano la memoria, misurati sul telefono:
+    //  1) createImageData veniva chiamata a OGNI fotogramma. La tela e' mezzo
+    //     schermo (540x1170 su un 1080x2340): 2,5 MB buttati via 60 volte al
+    //     secondo, 151 MB al secondo.
+    //  2) noise(true) veniva richiamata mentre la neve era gia' accesa, e ogni
+    //     chiamata faceva partire un ALTRO ciclo: cinque o sei che allocavano
+    //     insieme. Il processo che disegna la pagina saliva a 2 GB in 45
+    //     secondi, il sistema lo uccideva e l'app ripartiva dal login.
+    // Ora: una sola immagine riusata, e un solo ciclo alla volta.
+    var noiseImg = null, noiseAttivo = false;
     function noise(on) {
       noiseOn = on;
       cv.style.opacity = on ? '1' : '0';
       if (!on) return;
-      cv.width = Math.max(2, Math.floor(bs.clientWidth / 2));
-      cv.height = Math.max(2, Math.floor(bs.clientHeight / 2));
+      var L = Math.max(2, Math.floor(bs.clientWidth / 2));
+      var A = Math.max(2, Math.floor(bs.clientHeight / 2));
+      if (cv.width !== L || cv.height !== A || !noiseImg) {
+        cv.width = L; cv.height = A;
+        noiseImg = nctx.createImageData(L, A);
+        var d0 = noiseImg.data;
+        for (var k = 3; k < d0.length; k += 4) d0[k] = 255;   // opacita' una volta sola
+      }
+      if (noiseAttivo) return;      // un ciclo c'e' gia': non se ne avvia un altro
+      noiseAttivo = true;
       (function loop() {
-        if (!noiseOn || done) return;
-        var img = nctx.createImageData(cv.width, cv.height);
-        for (var i = 0; i < img.data.length; i += 4) { var v = Math.random() * 255 | 0; img.data[i] = v; img.data[i+1] = v; img.data[i+2] = v; img.data[i+3] = 255; }
-        nctx.putImageData(img, 0, 0);
+        if (!noiseOn || done) { noiseAttivo = false; return; }
+        var d = noiseImg.data;
+        for (var i = 0; i < d.length; i += 4) { var v = Math.random() * 255 | 0; d[i] = v; d[i+1] = v; d[i+2] = v; }
+        nctx.putImageData(noiseImg, 0, 0);
         requestAnimationFrame(loop);
       })();
     }
@@ -7170,11 +7660,18 @@ html.undr-ruota .screen { height: 100% !important; }
   function showStatic(ms) {
     var c = document.getElementById('tv-static');
     if (!c) return;
-    // disegna SOLO se il tab TV è davvero visibile: su tab nascosta è texture GPU sprecata
-    // (su driver Mali fragili contribuiva alla corruzione del rendering)
-    var tp = document.getElementById('tab-player');
-    if (!tp || !tp.classList.contains('active')) return;
+    // Disegna SOLO se il riquadro della TV si vede davvero: su una schermata
+    // nascosta sarebbe texture sprecata, e su certi driver Mali corrompeva il
+    // disegno — il motivo per cui il controllo c'era.
+    // Prima si guardava se la SCHEDA TV fosse quella "attiva". Sul telefono
+    // funziona, ma su PC la finestra e' larga e le tre colonne si vedono tutte
+    // insieme: la scheda attiva resta la CODA anche mentre guardi la TV, quindi
+    // la neve non usciva mai. Ora conta se il riquadro ha una dimensione a
+    // schermo, che e' vero in tutti e due i casi e falso quando e' nascosto.
     var host = c.parentElement;
+    if (!host) return;
+    var vista = host.getBoundingClientRect();
+    if (!vista.width || !vista.height) return;
     var w = (host && host.offsetWidth) || 320;
     var h = (host && host.offsetHeight) || 180;
     c.width = Math.max(40, Math.floor(w / 3));
@@ -7182,7 +7679,7 @@ html.undr-ruota .screen { height: 100% !important; }
     c.style.display = 'block';
     var ctx = c.getContext('2d');
     var img = ctx.createImageData(c.width, c.height);
-    var stop = Date.now() + (ms || 420);
+    var stop = Date.now() + (ms || 700);
     (function frame() {
       var d = img.data;
       for (var p = 0; p < d.length; p += 4) {
@@ -7232,7 +7729,12 @@ html.undr-ruota .screen { height: 100% !important; }
     var origPlay = window.playTrack;
     if (origPlay) {
       window.playTrack = function(idx, autoplay) {
-        showStatic(420);
+        // 700 ms invece di 420: prima, a fine traccia, playTrack veniva
+        // chiamata tre o quattro volte di fila (il difetto del loop) e la
+        // neve ripartiva a ogni chiamata, risultando lunga e vistosa. Ora la
+        // chiamata e' una sola: allungo la singola raffica per ridare al
+        // cambio canale lo stesso peso di prima.
+        showStatic(700);
         if (window.__undrResetBgRetries) window.__undrResetBgRetries();
         var badge = document.getElementById('tv-source-badge');
         if (badge) badge.textContent = 'CH·' + String(((idx | 0) + 1)).padStart(2, '0');
@@ -8066,7 +8568,21 @@ function _inTv() {
             getComputedStyle(tv).display !== 'none');
 }
 var _orientStato = 'mai calcolato';
+// Su iPhone questa rotazione NON si applica, e il motivo e' che si sommava a
+// un'altra. Su Android la finestra e' bloccata in verticale dal manifesto:
+// girando il telefono non ruota niente, ed e' l'app a ruotare il solo video di
+// 90 gradi per farlo riempire lo schermo. Su iPhone quel blocco non esiste, la
+// PAGINA ruota gia' da sola, e i 90 gradi dell'app si sommavano: un elemento a
+// schermo intero, fisso e trasformato, che manda in crisi la composizione di
+// iOS. Da qui lo sfarfallio entrando in TV di lato, e il blocco al ritorno
+// sulla playlist.
+// Li' il pieno schermo lo fa YouTube stesso: l'iframe ha gia' allowfullscreen,
+// e il suo tasto gestisce rotazione e schermo intero in modo nativo.
+var _iOSqui = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
 function _tvPienoSchermo(acceso) {
+  if (_iOSqui) return;
   if (document.body.classList.contains('tv-orizz') === acceso) return;
   document.body.classList.toggle('tv-orizz', acceso);
   _orientStato = acceso ? 'TV a pieno schermo' : 'vista normale';

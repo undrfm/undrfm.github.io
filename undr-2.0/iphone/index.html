@@ -3941,7 +3941,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '22ago-tv';
+var VERSIONE_UNDR = '22ago-tv2';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -8830,14 +8830,46 @@ var _iOSqui = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
 // quelle le mette YouTube dentro al suo riquadro, e non si possono togliere
 // senza tagliare l'immagine.
 (function () {
+  // Le unita' 100vw / 100dvh su iPhone NON corrispondono all'area davvero
+  // visibile: cambiano con le barre di Safari e con le zone sicure attorno
+  // alla tacca. Se il riquadro non coincide con lo schermo, YouTube centra il
+  // video dentro un riquadro storto — ed ecco la banda nera piu' larga da un
+  // lato. Quindi lo schermo lo MISURO, e scrivo i pixel veri.
+  function misura() {
+    var w = document.getElementById('yt-iframe-wrap');
+    if (!w) return;
+    if (!document.body.classList.contains('tv-pieno-ios')) {
+      // si rimettono i valori del riposo (quelli scritti nel corpo pagina)
+      w.style.setProperty('width', '100%');
+      w.style.setProperty('height', '100%');
+      w.style.removeProperty('left');
+      w.style.removeProperty('top');
+      return;
+    }
+    var vv = window.visualViewport;
+    var L = Math.round(vv ? vv.width  : window.innerWidth);
+    var A = Math.round(vv ? vv.height : window.innerHeight);
+    var x = Math.round(vv ? (vv.offsetLeft || 0) : 0);
+    var y = Math.round(vv ? (vv.offsetTop  || 0) : 0);
+    w.style.setProperty('width',  L + 'px', 'important');
+    w.style.setProperty('height', A + 'px', 'important');
+    w.style.setProperty('left',   x + 'px', 'important');
+    w.style.setProperty('top',    y + 'px', 'important');
+  }
   function aggiorna() {
     var orizzontale = window.innerWidth > window.innerHeight;
     document.body.classList.toggle('tv-pieno-ios', !!(orizzontale && _inTv()));
+    misura();
   }
   window.__tvPienoIOS = aggiorna;          // per poterlo provare in anteprima
   if (!_iOSqui) return;
   window.addEventListener('resize', aggiorna, { passive: true });
-  window.addEventListener('orientationchange', function () { setTimeout(aggiorna, 300); }, { passive: true });
+  window.addEventListener('orientationchange', function () { setTimeout(aggiorna, 300); setTimeout(aggiorna, 700); }, { passive: true });
+  // le barre di Safari entrano ed escono: il riquadro le segue
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', misura, { passive: true });
+    window.visualViewport.addEventListener('scroll', misura, { passive: true });
+  }
   setInterval(aggiorna, 400);              // cambio scheda, uscita dalla crew
   aggiorna();
 }());

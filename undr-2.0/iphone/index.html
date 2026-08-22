@@ -3935,7 +3935,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '22ago-unpezzo';
+var VERSIONE_UNDR = '22ago-unpezzo2';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -7221,6 +7221,13 @@ body.tv-orizz #sfondo-tela { display: none !important; }
     rgba(255,255,255,0.055) !important;
 }
 
+/* Cuore e stella si dissolvono mentre la riga si apre: a meta' corsa sono
+   gia' spariti, cosi' il tratto rosso resta pulito. --dissolvi lo scrive il
+   codice come NUMERO: una divisione fra pixel darebbe pixel, non un numero,
+   e il browser butterebbe via la regola. */
+.queue-item.swiping .qi-votes { opacity: var(--dissolvi, 1); }
+.queue-item.scivola .qi-votes { transition: opacity 0.18s ease-out; }
+
 /* la X, dentro il tratto rosso */
 .queue-item.swiping::after {
   content: '✕';
@@ -7231,7 +7238,7 @@ body.tv-orizz #sfondo-tela { display: none !important; }
   width: calc(var(--sw) * -1);
   display: flex; align-items: center; justify-content: center;
   font-family: var(--sans); font-size: 25px; font-weight: 400; color: #fff;
-  opacity: calc(var(--sw) / -70);
+  opacity: var(--comparsa, 1);
   pointer-events: none;   /* il tocco lo prende la riga: lo smista il codice */
 }
 /* ── IL PLAYER NON SI SPEGNE MAI (solo iOS) ─────────────────────
@@ -8200,6 +8207,11 @@ try {
   function apri(it, quanto) {
     it.classList.add('swiping');
     it.style.setProperty('--sw', quanto + 'px');
+    // due NUMERI, non due lunghezze: cuore e stella svaniscono nei primi 70 px,
+    // la X compare nella stessa corsa
+    var f = Math.min(1, Math.max(0, 1 + quanto / 70));
+    it.style.setProperty('--dissolvi', f);
+    it.style.setProperty('--comparsa', (1 - f).toFixed(3));
   }
   function chiudi() {
     var it = aperta;
@@ -8207,7 +8219,14 @@ try {
     if (!it || !it.isConnected) return;
     it.classList.add('scivola');
     it.style.setProperty('--sw', '0px');
-    setTimeout(function () { it.classList.remove('swiping', 'scivola'); it.style.removeProperty('--sw'); }, 220);
+    it.style.setProperty('--dissolvi', 1);
+    it.style.setProperty('--comparsa', 0);
+    setTimeout(function () {
+      it.classList.remove('swiping', 'scivola');
+      it.style.removeProperty('--sw');
+      it.style.removeProperty('--dissolvi');
+      it.style.removeProperty('--comparsa');
+    }, 220);
   }
 
   document.addEventListener('touchstart', function (e) {

@@ -3935,7 +3935,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '22ago-swipe3';
+var VERSIONE_UNDR = '22ago-unpezzo';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -7183,13 +7183,12 @@ body.tv-orizz #sfondo-tela { display: none !important; }
 #fm-band-card a { color: var(--accent); }
 
 /* ── SWIPE CON CONFERMA ─────────────────────────────────────
-   Il tasto rosso sta DIETRO alla riga e viene scoperto mentre lei scivola.
-   Ne basta uno solo per tutta la lista: puo' esserci una riga aperta per volta. */
-/* La playlist NON e' un contenitore che scorre di lato. Dichiarava solo
-   overflow-y: auto, e il CSS forza l'altro asse ad auto: su iPhone la lista
-   si faceva trascinare a destra e a sinistra, e quel trascinamento litigava
-   con lo swipe. Le righe avevano gia' pan-y, ma il dito che parte NELLO
-   SPAZIO FRA DUE RIGHE tocca la lista, che era libera in tutte le direzioni. */
+   UN PEZZO SOLO. Il rettangolo della traccia non si sposta: scivola il suo
+   CONTENUTO, e il rosso e' lo sfondo del rettangolo stesso.
+   Prima erano due elementi accostati, e due sfocature di sfondo vicine non
+   combaciano mai davvero: restava sempre un filo di luce sulla giunzione.
+   Con un elemento solo la giunzione non esiste — il rettangolo si allunga e
+   il suo terzo destro diventa rosso, in dissolvenza. */
 #queue-list, .queue-list {
   position: relative;
   overflow-x: hidden !important;
@@ -7197,35 +7196,44 @@ body.tv-orizz #sfondo-tela { display: none !important; }
   overscroll-behavior-x: none !important;
 }
 #tab-queue { touch-action: pan-y; overscroll-behavior-x: none; }
-.queue-item { z-index: 1; }
-/* Niente rosso addosso alla riga: il rosso sta dietro e ci sfuma sopra.
-   La riga tiene i suoi angoli e il suo bordo: e' il rosso che la raggiunge
-   in dissolvenza, non un blocco che le si accosta. */
-.queue-item.swiping { background: rgba(255,255,255,0.055) !important; }
-.queue-item.swiping::after { content: none !important; }
-.queue-item.scivola { transition: transform 0.18s ease-out, opacity 0.18s !important; }
-#swipe-x {
-  position: absolute; z-index: 0; display: none;
-  align-items: center; justify-content: center;
-  border-radius: 0 16px 16px 0; color: #fff; cursor: pointer;
-  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
-  /* Il rosso nasce dal nulla e si accende andando verso destra: passando
-     sotto la riga (che e' semitrasparente e sfoca cio' che ha dietro) si
-     legge come una dissolvenza sul rettangolo della traccia, non come un
-     secondo rettangolo appoggiato di fianco. Niente bordo, per lo stesso
-     motivo: un bordo sarebbe una linea netta. */
-  border: none;
-  background: linear-gradient(90deg,
-    rgba(255,77,77,0) 0%,
-    rgba(255,77,77,0.10) 26%,
-    rgba(255,77,77,0.34) 47%,
-    rgba(255,77,77,0.72) 68%,
-    rgba(255,77,77,0.94) 100%);
-}
-#swipe-x.visibile { display: flex; justify-content: flex-end; }
-#swipe-x svg { width: 26px; height: 26px; display: block; }
-#swipe-x:active { background: rgba(255,77,77,1); }
 
+/* --sw e' quanto e' aperta la riga, in pixel, negativo. Lo scrive il codice. */
+.queue-item.swiping { --sw: 0px; }
+.queue-item.swiping > * {
+  transform: translateX(var(--sw));
+  will-change: transform;
+}
+.queue-item.scivola > * { transition: transform 0.18s ease-out; }
+
+/* Il rosso NON e' un altro rettangolo: e' il fondo di questo, che si accende
+   sull'ultimo tratto. Sotto c'e' lo stesso vetro di sempre, quindi il
+   materiale non cambia mai. */
+.queue-item.swiping {
+  /* il contenuto scivola via DENTRO il rettangolo e ci sparisce sotto il
+     bordo tondo, invece di uscire e finire tagliato dal bordo dello schermo */
+  overflow: hidden;
+  background:
+    linear-gradient(90deg,
+      rgba(255,77,77,0)    calc(100% + var(--sw) - 46px),
+      rgba(255,77,77,0.30) calc(100% + var(--sw) + 6px),
+      rgba(255,77,77,0.70) calc(100% + var(--sw) * 0.35),
+      rgba(255,77,77,0.94) 100%),
+    rgba(255,255,255,0.055) !important;
+}
+
+/* la X, dentro il tratto rosso */
+.queue-item.swiping::after {
+  content: '✕';
+  /* c'e' una vecchia regola su questo stesso pseudo-elemento che lo alza di
+     meta' altezza: senza azzerarla la X finiva sopra il rettangolo */
+  transform: none !important;
+  position: absolute; top: 0; bottom: 0; right: 0;
+  width: calc(var(--sw) * -1);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--sans); font-size: 25px; font-weight: 400; color: #fff;
+  opacity: calc(var(--sw) / -70);
+  pointer-events: none;   /* il tocco lo prende la riga: lo smista il codice */
+}
 /* ── IL PLAYER NON SI SPEGNE MAI (solo iOS) ─────────────────────
    Non e' un vezzo: su iOS un iframe dentro un ramo display:none non fa
    partire niente. Il player resta impaginato a grandezza vera e viene
@@ -8178,69 +8186,28 @@ try {
 } catch (e) {}
 
 (function () {
-  var SOGLIA = 96;          // quanto si apre la riga (un terzo, calcolato su misura)
-  // Uno swipe veloce il telefono lo scambia anche per un tocco e manda un click
-  // subito dopo. Va buttato quel click li' e basta: si alza una bandierina che
-  // dura un attimo e si abbassa da sola, cosi' un tocco VOLUTO poco dopo non
-  // viene mai ingoiato.
-  var attesaClickSwipe = false, timerBandierina = null;
-  var apertoIl = 0;         // quando si e' aperta: lo scorrimento non la chiude subito
+  var SOGLIA = 96;          // quanto si apre la riga: un terzo, calcolato su misura
   var riga = null;          // la riga che sto trascinando adesso
   var aperta = null;        // la riga aperta: ce n'e' al massimo una
   var startX = 0, startY = 0, dx = 0, base = 0;
   var deciso = false, orizzontale = false;
-  var pannello = null;
+  var apertoIl = 0;
+  // Uno swipe veloce il telefono lo scambia anche per un tocco e manda un click
+  // subito dopo: va buttato quello e basta. La bandierina si abbassa da sola,
+  // cosi' un tocco VOLUTO poco dopo non viene mai ingoiato.
+  var attesaClickSwipe = false, timerBandierina = null;
 
-  function creaPannello() {
-    if (pannello) return pannello;
-    pannello = document.createElement('div');
-    pannello.id = 'swipe-x';
-    pannello.setAttribute('aria-label', 'rimuovi');
-    pannello.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-      'stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
-    pannello.addEventListener('click', function (e) {
-      e.stopPropagation(); e.preventDefault();
-      var it = aperta;
-      aperta = null;
-      pannello.classList.remove('visibile');
-      if (!it || !it.isConnected) return;
-      var id = it.getAttribute('data-id');
-      var chiaveStash = it.getAttribute('data-stash-key');
-      it.classList.add('scivola');
-      it.style.transform = 'translateX(-110%)';
-      it.style.opacity = '0';
-      setTimeout(function () {
-        if (chiaveStash && typeof removeStashByKey === 'function') removeStashByKey(chiaveStash);
-        else if (id && typeof removeSong === 'function') removeSong(id);
-        if (typeof renderQueue === 'function') renderQueue();
-      }, 180);
-    });
-    return pannello;
+  function apri(it, quanto) {
+    it.classList.add('swiping');
+    it.style.setProperty('--sw', quanto + 'px');
   }
-
-  function mettiPannello(it) {
-    var lista = document.getElementById('queue-list');
-    if (!lista || !it) return;
-    var p = creaPannello();
-    if (p.parentNode !== lista) lista.appendChild(p);
-    p.style.top = it.offsetTop + 'px';
-    p.style.height = it.offsetHeight + 'px';
-    p.style.right = Math.max(0, lista.clientWidth - (it.offsetLeft + it.offsetWidth)) + 'px';
-    // si allunga di 90 px SOTTO la riga: e' lo spazio in cui il rosso sfuma
-    p.style.width = (SOGLIA + 90) + 'px';
-    // la X resta al centro del terzo scoperto, non al centro del pannello
-    p.style.paddingRight = Math.max(0, Math.round(SOGLIA / 2 - 13)) + 'px';
-    p.classList.add('visibile');
-  }
-
   function chiudi() {
     var it = aperta;
     aperta = null;
-    if (pannello) pannello.classList.remove('visibile');
     if (!it || !it.isConnected) return;
     it.classList.add('scivola');
-    it.style.transform = '';
-    setTimeout(function () { it.classList.remove('swiping', 'scivola'); }, 200);
+    it.style.setProperty('--sw', '0px');
+    setTimeout(function () { it.classList.remove('swiping', 'scivola'); it.style.removeProperty('--sw'); }, 220);
   }
 
   document.addEventListener('touchstart', function (e) {
@@ -8268,21 +8235,13 @@ try {
       deciso = true;
       orizzontale = Math.abs(dx) > Math.abs(dy) * 2;
       if (!orizzontale) { riga = null; chiudi(); return; }
-      // Da riga chiusa, trascinare verso destra non apre niente: prima il
-      // rosso compariva lo stesso e si sovrapponeva alla traccia.
+      // Da riga chiusa, verso destra non c'e' niente da aprire.
       if (base === 0 && dx > 0) { riga = null; return; }
       if (aperta && aperta !== riga) chiudi();
     }
     var pos = Math.max(-SOGLIA, Math.min(0, base + dx));
-    riga.style.transform = 'translateX(' + pos + 'px)';
-    // il rosso si vede solo quando c'e' davvero del vuoto da riempire
-    if (pos < -4) {
-      riga.classList.add('swiping');
-      mettiPannello(riga);
-    } else {
-      riga.classList.remove('swiping');
-      if (pannello) pannello.classList.remove('visibile');
-    }
+    if (pos < -1) apri(riga, pos);
+    else { riga.classList.remove('swiping'); riga.style.removeProperty('--sw'); }
   }, { passive: true });
 
   function finito() {
@@ -8291,15 +8250,14 @@ try {
     if (!orizzontale) return;
     it.classList.add('scivola');
     if (Math.max(-SOGLIA, Math.min(0, base + dx)) <= -SOGLIA / 2) {
-      it.style.transform = 'translateX(' + (-SOGLIA) + 'px)';
+      apri(it, -SOGLIA);
       aperta = it;
       apertoIl = Date.now();
       attesaClickSwipe = true;
       clearTimeout(timerBandierina);
       timerBandierina = setTimeout(function () { attesaClickSwipe = false; }, 300);
-      mettiPannello(it);
     } else {
-      aperta = it;   // chiudi() la riporta a posto e ripulisce le classi
+      aperta = it;
       chiudi();
     }
   }
@@ -8317,19 +8275,35 @@ try {
     chiudi();
   }, true);
 
+  function elimina(it) {
+    aperta = null;
+    if (!it || !it.isConnected) return;
+    var id = it.getAttribute('data-id');
+    var chiaveStash = it.getAttribute('data-stash-key');
+    it.classList.add('scivola');
+    it.style.transform = 'translateX(-110%)';
+    it.style.opacity = '0';
+    setTimeout(function () {
+      if (chiaveStash && typeof removeStashByKey === 'function') removeStashByKey(chiaveStash);
+      else if (id && typeof removeSong === 'function') removeSong(id);
+      if (typeof renderQueue === 'function') renderQueue();
+    }, 180);
+  }
+
   document.addEventListener('click', function (e) {
-    if (pannello && (e.target === pannello || pannello.contains(e.target))) return;  // la X ha il suo
     if (!aperta) return;              // NIENTE aperto: il tocco passa sempre, la canzone parte
-    if (!aperta.isConnected) { aperta = null; if (pannello) pannello.classList.remove('visibile'); return; }
-    // Uno swipe VELOCE il telefono lo scambia anche per un tocco e manda un
-    // click subito dopo: arrivava qui e richiudeva la riga appena aperta — e
-    // sembrava che il comando non venisse preso. Quel click va solo buttato.
+    if (!aperta.isConnected) { aperta = null; return; }
     if (attesaClickSwipe) {
       attesaClickSwipe = false; clearTimeout(timerBandierina);
-      e.stopPropagation(); e.preventDefault(); return;   // e- il click dello swipe: si butta
+      e.stopPropagation(); e.preventDefault(); return;   // e' il click dello swipe: si butta
     }
-    e.stopPropagation(); e.preventDefault();   // c'e' una riga aperta: questo tocco la richiude
-    chiudi();
+    e.stopPropagation(); e.preventDefault();
+    // La X non e' un elemento a se': e' il tratto rosso della riga stessa.
+    // Se il tocco cade li' dentro, cancella; altrimenti richiude e basta.
+    var b = aperta.getBoundingClientRect();
+    var dentroLaX = (e.target === aperta || aperta.contains(e.target)) &&
+                    e.clientX >= b.right - SOGLIA && e.clientX <= b.right;
+    if (dentroLaX) elimina(aperta); else chiudi();
   }, true);
 })();
 </script>

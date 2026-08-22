@@ -3941,7 +3941,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '22ago-riempi';
+var VERSIONE_UNDR = '22ago-riempi2';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -7277,10 +7277,14 @@ body.tv-pieno-ios .tv-screen     { margin: 0 !important; border: none !important
 body.tv-pieno-ios #yt-iframe-wrap {
   overflow: hidden !important;   /* in RIEMPI il video sborda: qui viene tagliato */
   position: fixed !important; z-index: 40 !important;
-  top: 0 !important; left: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
-  height: 100dvh !important;   /* la barra di Safari va e viene: dvh la segue */
+  /* Tutti e quattro i lati a zero, e NIENTE misure. Un elemento fisso si
+     ancora alla finestra di impaginazione: mettendogli 100vw/100dvh (o dei
+     pixel presi da visualViewport, che misura la finestra VISIBILE) si
+     mescolano due sistemi di riferimento diversi. Su desktop coincidono, su
+     iPhone no — e la differenza esce tutta da un lato solo. Con inset a zero
+     il riquadro E' l'area della finestra, per definizione. */
+  top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+  width: auto !important; height: auto !important;
   transform: none !important;
   background: #000 !important;
 }
@@ -8858,24 +8862,22 @@ var _iOSqui = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   function misura() {
     var w = document.getElementById('yt-iframe-wrap');
     if (!w) return;
+    w.style.removeProperty('left');
+    w.style.removeProperty('top');
     if (!document.body.classList.contains('tv-pieno-ios')) {
       // si rimettono i valori del riposo (quelli scritti nel corpo pagina)
       w.style.setProperty('width', '100%');
       w.style.setProperty('height', '100%');
-      w.style.removeProperty('left');
-      w.style.removeProperty('top');
+      riposoVideo();   // NON misuraVideo: con misure zero azzerava il video
       return;
     }
-    var vv = window.visualViewport;
-    var L = Math.round(vv ? vv.width  : window.innerWidth);
-    var A = Math.round(vv ? vv.height : window.innerHeight);
-    var x = Math.round(vv ? (vv.offsetLeft || 0) : 0);
-    var y = Math.round(vv ? (vv.offsetTop  || 0) : 0);
-    w.style.setProperty('width',  L + 'px', 'important');
-    w.style.setProperty('height', A + 'px', 'important');
-    w.style.setProperty('left',   x + 'px', 'important');
-    w.style.setProperty('top',    y + 'px', 'important');
-    misuraVideo(L, A);
+    // Le misure scritte a mano se ne vanno: al riquadro ci pensa inset: 0.
+    w.style.removeProperty('width');
+    w.style.removeProperty('height');
+    // e per il taglio di RIEMPI si legge quanto e' venuto DAVVERO grande,
+    // invece di indovinarlo con delle unita'
+    var r = w.getBoundingClientRect();
+    misuraVideo(Math.round(r.width), Math.round(r.height));
   }
 
   // ADATTA: il riquadro del video e' grande quanto lo schermo e ci pensa
@@ -8884,18 +8886,21 @@ var _iOSqui = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   // RIEMPI: il riquadro si fa PIU' GRANDE dello schermo, quanto serve perche'
   //   un 16:9 lo copra tutto, e quello che avanza viene tagliato. Niente
   //   bande, ma sopra e sotto (o ai lati) si perde un pezzo di immagine.
+  // il video torna com'e' scritto nel corpo pagina: tutto il suo riquadro
+  function riposoVideo() {
+    var ifr = document.getElementById('yt-iframe');
+    if (!ifr) return;
+    ifr.style.setProperty('width', '100%');
+    ifr.style.setProperty('height', '100%');
+    ifr.style.setProperty('left', '0px');
+    ifr.style.setProperty('top', '0px');
+    ifr.style.setProperty('right', '0px');
+    ifr.style.setProperty('bottom', '0px');
+  }
   function misuraVideo(L, A) {
     var ifr = document.getElementById('yt-iframe');
     if (!ifr) return;
-    if (!document.body.classList.contains('tv-riempi')) {
-      ifr.style.setProperty('width', '100%');
-      ifr.style.setProperty('height', '100%');
-      ifr.style.setProperty('left', '0px');
-      ifr.style.setProperty('top', '0px');
-      ifr.style.setProperty('right', '0px');
-      ifr.style.setProperty('bottom', '0px');
-      return;
-    }
+    if (!document.body.classList.contains('tv-riempi')) { riposoVideo(); return; }
     var l, a, forma = 16 / 9;
     if (L / A > forma) { l = L; a = Math.ceil(L / forma); }   // schermo piu' lungo del video
     else               { a = A; l = Math.ceil(A * forma); }   // schermo piu' alto

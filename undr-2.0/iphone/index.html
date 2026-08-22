@@ -2243,7 +2243,13 @@ function renderQueue() {
   }
   let stashKeys = {};
   try { loadStash().forEach(t => { stashKeys[t.source + ':' + t.videoId] = true; }); } catch(e) {}
-  el.innerHTML = queue.map((s, i) => {
+  // La lista si guarda dalla PIU' RECENTE alla piu' vecchia: l'ultima
+  // aggiunta sta in cima. Si gira SOLO la vista: la coda vera resta
+  // nell'ordine in cui le tracce sono entrate, perche' e' condivisa con la
+  // crew e girarla qui sfaserebbe gli altri dispositivi.
+  var _ordine = queue.map(function (_x, _k) { return _k; }).reverse();
+  el.innerHTML = _ordine.map((i) => {
+    const s = queue[i];
     if (!_matchesFilter(s)) return '';
     _backfillMeta(s);   // tracce senza titolo/band: completale ora (una volta sola)
     _daRisolvere.push(s);   // fuori dal ciclo: qui dentro NON si tocca la lista
@@ -3935,7 +3941,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '22ago-unpezzo2';
+var VERSIONE_UNDR = '22ago-recenti';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -7197,13 +7203,11 @@ body.tv-orizz #sfondo-tela { display: none !important; }
 }
 #tab-queue { touch-action: pan-y; overscroll-behavior-x: none; }
 
-/* --sw e' quanto e' aperta la riga, in pixel, negativo. Lo scrive il codice. */
+/* --sw e' quanto e' aperta la riga, in pixel, negativo. Lo scrive il codice.
+   NIENTE si sposta: copertina, titolo e artista restano dove sono. E' solo il
+   rosso che avanza da destra sul rettangolo, e sotto ci spariscono cuore e
+   stella. */
 .queue-item.swiping { --sw: 0px; }
-.queue-item.swiping > * {
-  transform: translateX(var(--sw));
-  will-change: transform;
-}
-.queue-item.scivola > * { transition: transform 0.18s ease-out; }
 
 /* Il rosso NON e' un altro rettangolo: e' il fondo di questo, che si accende
    sull'ultimo tratto. Sotto c'e' lo stesso vetro di sempre, quindi il
@@ -7219,6 +7223,12 @@ body.tv-orizz #sfondo-tela { display: none !important; }
       rgba(255,77,77,0.70) calc(100% + var(--sw) * 0.35),
       rgba(255,77,77,0.94) 100%),
     rgba(255,255,255,0.055) !important;
+  /* DOPO la scorciatoia, che altrimenti le azzera. Il gradiente si disegna
+     sulla zona di riempimento ma viene dipinto fino al bordo: fuori si
+     RIPETE, e a sinistra rispuntava la sua coda rossa come un filo. Cosi'
+     copre esattamente tutto il rettangolo, una volta sola. */
+  background-origin: border-box !important;
+  background-repeat: no-repeat !important;
 }
 
 /* Cuore e stella si dissolvono mentre la riga si apre: a meta' corsa sono

@@ -3935,7 +3935,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '22ago-swipe';
+var VERSIONE_UNDR = '22ago-swipe2';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -7187,14 +7187,24 @@ body.tv-orizz #sfondo-tela { display: none !important; }
    Ne basta uno solo per tutta la lista: puo' esserci una riga aperta per volta. */
 #queue-list { position: relative; }
 .queue-item { z-index: 1; }
-/* niente piu' rosso addosso alla riga: il rosso adesso e' il tasto dietro */
-.queue-item.swiping { background: rgba(255,255,255,0.055) !important; }
+/* niente piu' rosso addosso alla riga: il rosso adesso e' il tasto dietro.
+   E mentre scivola la riga perde gli angoli tondi e il bordo dalla parte del
+   rosso: erano due curve schiena contro schiena, e in mezzo si vedeva lo
+   stacco. Cosi' invece i due pezzi formano un rettangolo continuo. */
+.queue-item.swiping {
+  background: rgba(255,255,255,0.055) !important;
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  border-right-color: transparent !important;
+}
 .queue-item.swiping::after { content: none !important; }
 .queue-item.scivola { transition: transform 0.18s ease-out, opacity 0.18s !important; }
 #swipe-x {
   position: absolute; z-index: 0; display: none;
   align-items: center; justify-content: center;
-  border-radius: 16px; color: #fff; cursor: pointer;
+  /* squadrato a sinistra: di la' c'e' la traccia, e i due pezzi devono
+     leggersi come un rettangolo solo */
+  border-radius: 0 16px 16px 0; color: #fff; cursor: pointer;
   touch-action: manipulation; -webkit-tap-highlight-color: transparent;
   background: linear-gradient(90deg, rgba(255,77,77,0.30), rgba(255,77,77,0.92));
   border: 1px solid rgba(255,77,77,0.95);
@@ -7203,6 +7213,30 @@ body.tv-orizz #sfondo-tela { display: none !important; }
 #swipe-x.visibile { display: flex; }
 #swipe-x svg { width: 26px; height: 26px; display: block; }
 #swipe-x:active { background: rgba(255,77,77,1); }
+
+/* ── IL PLAYER NON SI SPEGNE MAI (solo iOS) ─────────────────────
+   Non e' un vezzo: su iOS un iframe dentro un ramo display:none non fa
+   partire niente. Il player resta impaginato a grandezza vera e viene
+   messo fuori dallo schermo, cosi' toccando una canzone dalla playlist
+   parte davvero, restando nella playlist. Posizione fissa: non sposta
+   nulla nell'impaginazione. */
+html.player-sempre-vivo #tab-player:not(.active) {
+  display: flex !important;
+  position: fixed !important;
+  left: -10000px !important; top: 0 !important;
+  width: 320px !important; height: 180px !important;
+  opacity: 0.01; pointer-events: none; z-index: -1;
+}
+/* e dentro, misure vere: un iframe alto zero per WebKit non esiste, e non
+   fa partire niente. Qui gli si da' un 320x180 pieno. */
+html.player-sempre-vivo #tab-player:not(.active) #yt-iframe-wrap {
+  width: 320px !important; height: 180px !important; display: block !important;
+}
+html.player-sempre-vivo #tab-player:not(.active) #yt-iframe,
+html.player-sempre-vivo #tab-player:not(.active) #yt-player-div {
+  width: 320px !important; height: 180px !important; display: block !important;
+}
+
 </style>
 <div id="screen-fm" class="screen">
   <div class="fm-head">
@@ -8116,8 +8150,29 @@ function broadcastProfile() {
 // o riportare indietro la riga la richiudono e basta.
 // E soprattutto: se non c'e' nessuna riga aperta, nessun tocco viene mai
 // ingoiato — toccare una canzone la fa partire, sempre.
+// Su iOS un iframe dentro un ramo display:none non puo' far partire niente, e
+// le schede non attive sono esattamente questo (.tab-content { display: none }).
+// Stando nella playlist il player era spento, quindi toccare una canzone non
+// faceva partire nulla: bisognava passare dalla scheda TV per farlo esistere
+// una volta — e infatti bastava passarci, senza nemmeno premere play.
+// Qui il player resta SEMPRE impaginato: quando non e' la scheda in vista lo
+// si parcheggia fuori dallo schermo, a grandezza vera. Fuori da iOS non cambia
+// niente: la regola si applica solo se il telefono e' di quelli.
+try {
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+    document.documentElement.classList.add('player-sempre-vivo');
+  }
+} catch (e) {}
+
 (function () {
   var SOGLIA = 96;          // quanto si apre la riga (un terzo, calcolato su misura)
+  // Uno swipe veloce il telefono lo scambia anche per un tocco e manda un click
+  // subito dopo. Va buttato quel click li' e basta: si alza una bandierina che
+  // dura un attimo e si abbassa da sola, cosi' un tocco VOLUTO poco dopo non
+  // viene mai ingoiato.
+  var attesaClickSwipe = false, timerBandierina = null;
+  var apertoIl = 0;         // quando si e' aperta: lo scorrimento non la chiude subito
   var riga = null;          // la riga che sto trascinando adesso
   var aperta = null;        // la riga aperta: ce n'e' al massimo una
   var startX = 0, startY = 0, dx = 0, base = 0;
@@ -8159,7 +8214,7 @@ function broadcastProfile() {
     p.style.top = it.offsetTop + 'px';
     p.style.height = it.offsetHeight + 'px';
     p.style.right = Math.max(0, lista.clientWidth - (it.offsetLeft + it.offsetWidth)) + 'px';
-    p.style.width = SOGLIA + 'px';
+    p.style.width = (SOGLIA + 3) + 'px';   // 3 px sotto la riga: niente filo di sfondo in mezzo
     p.classList.add('visibile');
   }
 
@@ -8198,11 +8253,21 @@ function broadcastProfile() {
       deciso = true;
       orizzontale = Math.abs(dx) > Math.abs(dy) * 2;
       if (!orizzontale) { riga = null; chiudi(); return; }
+      // Da riga chiusa, trascinare verso destra non apre niente: prima il
+      // rosso compariva lo stesso e si sovrapponeva alla traccia.
+      if (base === 0 && dx > 0) { riga = null; return; }
       if (aperta && aperta !== riga) chiudi();
+    }
+    var pos = Math.max(-SOGLIA, Math.min(0, base + dx));
+    riga.style.transform = 'translateX(' + pos + 'px)';
+    // il rosso si vede solo quando c'e' davvero del vuoto da riempire
+    if (pos < -4) {
       riga.classList.add('swiping');
       mettiPannello(riga);
+    } else {
+      riga.classList.remove('swiping');
+      if (pannello) pannello.classList.remove('visibile');
     }
-    riga.style.transform = 'translateX(' + Math.max(-SOGLIA, Math.min(0, base + dx)) + 'px)';
   }, { passive: true });
 
   function finito() {
@@ -8213,6 +8278,10 @@ function broadcastProfile() {
     if (Math.max(-SOGLIA, Math.min(0, base + dx)) <= -SOGLIA / 2) {
       it.style.transform = 'translateX(' + (-SOGLIA) + 'px)';
       aperta = it;
+      apertoIl = Date.now();
+      attesaClickSwipe = true;
+      clearTimeout(timerBandierina);
+      timerBandierina = setTimeout(function () { attesaClickSwipe = false; }, 300);
       mettiPannello(it);
     } else {
       aperta = it;   // chiudi() la riporta a posto e ripulisce le classi
@@ -8222,13 +8291,28 @@ function broadcastProfile() {
   document.addEventListener('touchend', finito, { passive: true });
   document.addEventListener('touchcancel', finito, { passive: true });
 
-  // Scorrere richiude. Non mentre stai trascinando, ovviamente.
-  window.addEventListener('scroll', function () { if (!riga && aperta) chiudi(); }, true);
+  // Scorrere richiude. Ma NON i primi mezzo secondo: entrando nella playlist
+  // parte uno scorrimento morbido automatico (porta in vista la traccia in
+  // onda) e anche uno swipe deciso si porta dietro un filo di scorrimento.
+  // Chiudendo a ogni evento, la riga appena aperta si richiudeva da sola e
+  // sembrava che il comando non fosse stato preso.
+  window.addEventListener('scroll', function () {
+    if (riga || !aperta) return;
+    if (Date.now() - apertoIl < 500) return;
+    chiudi();
+  }, true);
 
   document.addEventListener('click', function (e) {
     if (pannello && (e.target === pannello || pannello.contains(e.target))) return;  // la X ha il suo
     if (!aperta) return;              // NIENTE aperto: il tocco passa sempre, la canzone parte
     if (!aperta.isConnected) { aperta = null; if (pannello) pannello.classList.remove('visibile'); return; }
+    // Uno swipe VELOCE il telefono lo scambia anche per un tocco e manda un
+    // click subito dopo: arrivava qui e richiudeva la riga appena aperta — e
+    // sembrava che il comando non venisse preso. Quel click va solo buttato.
+    if (attesaClickSwipe) {
+      attesaClickSwipe = false; clearTimeout(timerBandierina);
+      e.stopPropagation(); e.preventDefault(); return;   // e- il click dello swipe: si butta
+    }
     e.stopPropagation(); e.preventDefault();   // c'e' una riga aperta: questo tocco la richiude
     chiudi();
   }, true);

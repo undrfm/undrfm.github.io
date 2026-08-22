@@ -3941,7 +3941,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '22ago-tv2';
+var VERSIONE_UNDR = '22ago-riempi';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -7275,6 +7275,7 @@ body.tv-pieno-ios .tv-cabinet    { border: none !important; border-radius: 0 !im
 body.tv-pieno-ios .tv-screen     { margin: 0 !important; border: none !important;
                                    border-radius: 0 !important; background: #000 !important; }
 body.tv-pieno-ios #yt-iframe-wrap {
+  overflow: hidden !important;   /* in RIEMPI il video sborda: qui viene tagliato */
   position: fixed !important; z-index: 40 !important;
   top: 0 !important; left: 0 !important;
   width: 100vw !important;
@@ -7283,10 +7284,29 @@ body.tv-pieno-ios #yt-iframe-wrap {
   transform: none !important;
   background: #000 !important;
 }
-body.tv-pieno-ios #yt-iframe,
 body.tv-pieno-ios #yt-player-div {
   width: 100% !important; height: 100% !important; border: 0 !important; display: block !important;
 }
+body.tv-pieno-ios #yt-iframe { border: 0 !important; display: block !important; }
+
+/* Il pulsantino sta in alto a destra: in basso ci sono i comandi di YouTube
+   e in alto a sinistra il titolo del video. Volutamente smorto, per non
+   dare fastidio mentre guardi. */
+#tv-adatta { display: none; }
+body.tv-pieno-ios #tv-adatta {
+  display: block;
+  position: fixed; z-index: 41;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  right: calc(12px + env(safe-area-inset-right, 0px));
+  padding: 7px 13px; border-radius: 999px;
+  background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.85);
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  opacity: 0.55; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+body.tv-pieno-ios #tv-adatta:active { opacity: 1; background: rgba(0,0,0,0.8); }
 html.player-sempre-vivo #tab-player:not(.active) {
   display: flex !important;
   position: fixed !important;
@@ -8855,10 +8875,70 @@ var _iOSqui = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     w.style.setProperty('height', A + 'px', 'important');
     w.style.setProperty('left',   x + 'px', 'important');
     w.style.setProperty('top',    y + 'px', 'important');
+    misuraVideo(L, A);
   }
+
+  // ADATTA: il riquadro del video e' grande quanto lo schermo e ci pensa
+  //   YouTube a far stare dentro l'immagine, qualunque forma abbia. Restano
+  //   le bande, ma uguali dai due lati.
+  // RIEMPI: il riquadro si fa PIU' GRANDE dello schermo, quanto serve perche'
+  //   un 16:9 lo copra tutto, e quello che avanza viene tagliato. Niente
+  //   bande, ma sopra e sotto (o ai lati) si perde un pezzo di immagine.
+  function misuraVideo(L, A) {
+    var ifr = document.getElementById('yt-iframe');
+    if (!ifr) return;
+    if (!document.body.classList.contains('tv-riempi')) {
+      ifr.style.setProperty('width', '100%');
+      ifr.style.setProperty('height', '100%');
+      ifr.style.setProperty('left', '0px');
+      ifr.style.setProperty('top', '0px');
+      ifr.style.setProperty('right', '0px');
+      ifr.style.setProperty('bottom', '0px');
+      return;
+    }
+    var l, a, forma = 16 / 9;
+    if (L / A > forma) { l = L; a = Math.ceil(L / forma); }   // schermo piu' lungo del video
+    else               { a = A; l = Math.ceil(A * forma); }   // schermo piu' alto
+    ifr.style.setProperty('width',  l + 'px', 'important');
+    ifr.style.setProperty('height', a + 'px', 'important');
+    ifr.style.setProperty('left', Math.round((L - l) / 2) + 'px', 'important');
+    ifr.style.setProperty('top',  Math.round((A - a) / 2) + 'px', 'important');
+    ifr.style.setProperty('right',  'auto', 'important');
+    ifr.style.setProperty('bottom', 'auto', 'important');
+  }
+  // Il doppio tocco SUL VIDEO non e' possibile: quella superficie e' l'iframe
+  // di YouTube, che e' di un altro sito e si prende lui i tocchi. Metterci
+  // sopra uno strato per intercettarli vorrebbe dire bloccare i comandi di
+  // YouTube. Quindi: un pulsantino, in un angolo dove non da' fastidio.
+  var tasto = null;
+  function creaTasto() {
+    if (tasto) return tasto;
+    tasto = document.createElement('button');
+    tasto.id = 'tv-adatta';
+    tasto.type = 'button';
+    tasto.addEventListener('click', function (e) {
+      e.stopPropagation(); e.preventDefault();
+      var ora = document.body.classList.toggle('tv-riempi');
+      try { localStorage.setItem('undr-tv-riempi', ora ? '1' : '0'); } catch (err) {}
+      scriviTasto();
+      misura();
+    });
+    document.body.appendChild(tasto);
+    return tasto;
+  }
+  function scriviTasto() {
+    if (!tasto) return;
+    tasto.textContent = document.body.classList.contains('tv-riempi') ? 'RIEMPI' : 'ADATTA';
+  }
+  try {
+    if (localStorage.getItem('undr-tv-riempi') === '1') document.body.classList.add('tv-riempi');
+  } catch (e) {}
+
   function aggiorna() {
     var orizzontale = window.innerWidth > window.innerHeight;
-    document.body.classList.toggle('tv-pieno-ios', !!(orizzontale && _inTv()));
+    var pieno = !!(orizzontale && _inTv());
+    document.body.classList.toggle('tv-pieno-ios', pieno);
+    if (pieno) { creaTasto(); scriviTasto(); }
     misura();
   }
   window.__tvPienoIOS = aggiorna;          // per poterlo provare in anteprima

@@ -3935,7 +3935,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '22ago-swipe2';
+var VERSIONE_UNDR = '22ago-swipe3';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -7185,32 +7185,44 @@ body.tv-orizz #sfondo-tela { display: none !important; }
 /* ── SWIPE CON CONFERMA ─────────────────────────────────────
    Il tasto rosso sta DIETRO alla riga e viene scoperto mentre lei scivola.
    Ne basta uno solo per tutta la lista: puo' esserci una riga aperta per volta. */
-#queue-list { position: relative; }
-.queue-item { z-index: 1; }
-/* niente piu' rosso addosso alla riga: il rosso adesso e' il tasto dietro.
-   E mentre scivola la riga perde gli angoli tondi e il bordo dalla parte del
-   rosso: erano due curve schiena contro schiena, e in mezzo si vedeva lo
-   stacco. Cosi' invece i due pezzi formano un rettangolo continuo. */
-.queue-item.swiping {
-  background: rgba(255,255,255,0.055) !important;
-  border-top-right-radius: 0 !important;
-  border-bottom-right-radius: 0 !important;
-  border-right-color: transparent !important;
+/* La playlist NON e' un contenitore che scorre di lato. Dichiarava solo
+   overflow-y: auto, e il CSS forza l'altro asse ad auto: su iPhone la lista
+   si faceva trascinare a destra e a sinistra, e quel trascinamento litigava
+   con lo swipe. Le righe avevano gia' pan-y, ma il dito che parte NELLO
+   SPAZIO FRA DUE RIGHE tocca la lista, che era libera in tutte le direzioni. */
+#queue-list, .queue-list {
+  position: relative;
+  overflow-x: hidden !important;
+  touch-action: pan-y !important;
+  overscroll-behavior-x: none !important;
 }
+#tab-queue { touch-action: pan-y; overscroll-behavior-x: none; }
+.queue-item { z-index: 1; }
+/* Niente rosso addosso alla riga: il rosso sta dietro e ci sfuma sopra.
+   La riga tiene i suoi angoli e il suo bordo: e' il rosso che la raggiunge
+   in dissolvenza, non un blocco che le si accosta. */
+.queue-item.swiping { background: rgba(255,255,255,0.055) !important; }
 .queue-item.swiping::after { content: none !important; }
 .queue-item.scivola { transition: transform 0.18s ease-out, opacity 0.18s !important; }
 #swipe-x {
   position: absolute; z-index: 0; display: none;
   align-items: center; justify-content: center;
-  /* squadrato a sinistra: di la' c'e' la traccia, e i due pezzi devono
-     leggersi come un rettangolo solo */
   border-radius: 0 16px 16px 0; color: #fff; cursor: pointer;
   touch-action: manipulation; -webkit-tap-highlight-color: transparent;
-  background: linear-gradient(90deg, rgba(255,77,77,0.30), rgba(255,77,77,0.92));
-  border: 1px solid rgba(255,77,77,0.95);
-  box-shadow: 0 0 24px rgba(255,77,77,0.45);
+  /* Il rosso nasce dal nulla e si accende andando verso destra: passando
+     sotto la riga (che e' semitrasparente e sfoca cio' che ha dietro) si
+     legge come una dissolvenza sul rettangolo della traccia, non come un
+     secondo rettangolo appoggiato di fianco. Niente bordo, per lo stesso
+     motivo: un bordo sarebbe una linea netta. */
+  border: none;
+  background: linear-gradient(90deg,
+    rgba(255,77,77,0) 0%,
+    rgba(255,77,77,0.10) 26%,
+    rgba(255,77,77,0.34) 47%,
+    rgba(255,77,77,0.72) 68%,
+    rgba(255,77,77,0.94) 100%);
 }
-#swipe-x.visibile { display: flex; }
+#swipe-x.visibile { display: flex; justify-content: flex-end; }
 #swipe-x svg { width: 26px; height: 26px; display: block; }
 #swipe-x:active { background: rgba(255,77,77,1); }
 
@@ -8214,7 +8226,10 @@ try {
     p.style.top = it.offsetTop + 'px';
     p.style.height = it.offsetHeight + 'px';
     p.style.right = Math.max(0, lista.clientWidth - (it.offsetLeft + it.offsetWidth)) + 'px';
-    p.style.width = (SOGLIA + 3) + 'px';   // 3 px sotto la riga: niente filo di sfondo in mezzo
+    // si allunga di 90 px SOTTO la riga: e' lo spazio in cui il rosso sfuma
+    p.style.width = (SOGLIA + 90) + 'px';
+    // la X resta al centro del terzo scoperto, non al centro del pannello
+    p.style.paddingRight = Math.max(0, Math.round(SOGLIA / 2 - 13)) + 'px';
     p.classList.add('visibile');
   }
 

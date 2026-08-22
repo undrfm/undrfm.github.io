@@ -3941,7 +3941,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '22ago-riempi2';
+var VERSIONE_UNDR = '22ago-riempi3';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -7311,6 +7311,11 @@ body.tv-pieno-ios #tv-adatta {
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
 body.tv-pieno-ios #tv-adatta:active { opacity: 1; background: rgba(0,0,0,0.8); }
+body.tv-pieno-ios #tv-adatta.numeri {
+  opacity: 1; background: rgba(0,0,0,0.88); border-radius: 12px;
+  white-space: pre; text-align: left; line-height: 1.7; letter-spacing: 0.04em;
+  font-size: 10px; padding: 10px 12px;
+}
 html.player-sempre-vivo #tab-player:not(.active) {
   display: flex !important;
   position: fixed !important;
@@ -8921,8 +8926,28 @@ var _iOSqui = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     tasto = document.createElement('button');
     tasto.id = 'tv-adatta';
     tasto.type = 'button';
+    var timerPremuto = null;
+    function mostraNumeri() {
+      tasto.dataset.numeri = '1';
+      tasto.textContent = numeri();
+      tasto.classList.add('numeri');
+      setTimeout(function () {
+        tasto.dataset.numeri = '0';
+        tasto.classList.remove('numeri');
+        scriviTasto();
+      }, 12000);
+    }
+    tasto.addEventListener('touchstart', function () {
+      clearTimeout(timerPremuto);
+      timerPremuto = setTimeout(mostraNumeri, 650);
+    }, { passive: true });
+    ['touchend', 'touchcancel', 'touchmove'].forEach(function (ev) {
+      tasto.addEventListener(ev, function () { clearTimeout(timerPremuto); }, { passive: true });
+    });
+    tasto.addEventListener('contextmenu', function (e) { e.preventDefault(); mostraNumeri(); });
     tasto.addEventListener('click', function (e) {
       e.stopPropagation(); e.preventDefault();
+      if (tasto.dataset.numeri === '1') return;   // sto guardando i numeri
       var ora = document.body.classList.toggle('tv-riempi');
       try { localStorage.setItem('undr-tv-riempi', ora ? '1' : '0'); } catch (err) {}
       scriviTasto();
@@ -8931,9 +8956,37 @@ var _iOSqui = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     document.body.appendChild(tasto);
     return tasto;
   }
+  // La scritta dice cosa SUCCEDE se lo premi, non dove sei adesso: se il video
+  // e' stretto il tasto dice RIEMPI, se e' pieno dice ADATTA.
   function scriviTasto() {
-    if (!tasto) return;
-    tasto.textContent = document.body.classList.contains('tv-riempi') ? 'RIEMPI' : 'ADATTA';
+    if (!tasto || tasto.dataset.numeri === '1') return;
+    tasto.textContent = document.body.classList.contains('tv-riempi') ? 'ADATTA' : 'RIEMPI';
+  }
+
+  // Tenendo premuto il tasto compaiono le misure vere dello schermo e del
+  // riquadro: se il video risultasse ancora storto, bastano questi numeri per
+  // capire da dove viene lo spostamento, senza tirare a indovinare.
+  function numeri() {
+    var w = document.getElementById('yt-iframe-wrap');
+    var ifr = document.getElementById('yt-iframe');
+    var rw = w ? w.getBoundingClientRect() : { left: 0, width: 0 };
+    var ri = ifr ? ifr.getBoundingClientRect() : { left: 0, width: 0 };
+    var vv = window.visualViewport;
+    var prova = document.createElement('div');
+    prova.style.cssText = 'position:fixed;left:env(safe-area-inset-left,0px);top:0;width:1px;height:1px';
+    document.body.appendChild(prova);
+    var sinistraSicura = Math.round(prova.getBoundingClientRect().left);
+    prova.style.left = 'auto'; prova.style.right = 'env(safe-area-inset-right,0px)';
+    var destraSicura = Math.round(window.innerWidth - prova.getBoundingClientRect().right);
+    prova.parentNode.removeChild(prova);
+    return [
+      'finestra   ' + window.innerWidth + ' x ' + window.innerHeight,
+      'impagin.   ' + document.documentElement.clientWidth + ' x ' + document.documentElement.clientHeight,
+      'visibile   ' + (vv ? Math.round(vv.width) + ' x ' + Math.round(vv.height) + '  scarto ' + Math.round(vv.offsetLeft || 0) : '-'),
+      'riquadro   da ' + Math.round(rw.left) + ' largo ' + Math.round(rw.width),
+      'video      da ' + Math.round(ri.left) + ' largo ' + Math.round(ri.width),
+      'zone sic.  sx ' + sinistraSicura + '  dx ' + destraSicura
+    ].join(String.fromCharCode(10));
   }
   try {
     if (localStorage.getItem('undr-tv-riempi') === '1') document.body.classList.add('tv-riempi');

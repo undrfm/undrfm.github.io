@@ -3941,7 +3941,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '22ago-recenti';
+var VERSIONE_UNDR = '22ago-tv';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -7257,6 +7257,36 @@ body.tv-orizz #sfondo-tela { display: none !important; }
    messo fuori dallo schermo, cosi' toccando una canzone dalla playlist
    parte davvero, restando nella playlist. Posizione fissa: non sposta
    nulla nell'impaginazione. */
+/* ── TV A TUTTO SCHERMO SU iPHONE ─────────────────────────────
+   Stessa idea di body.tv-orizz (che serve ad Android), ma senza rotazione:
+   su iPhone la pagina gira gia' da sola, ruotare di nuovo raddoppierebbe. */
+body.tv-pieno-ios .room-header,
+body.tv-pieno-ios .tabbar-bottom,
+body.tv-pieno-ios .tv-logo-row,
+body.tv-pieno-ios .tv-antennas,
+body.tv-pieno-ios .tv-ticker-row,
+body.tv-pieno-ios .tv-controls,
+body.tv-pieno-ios .aurora,
+body.tv-pieno-ios .blob          { display: none !important; }
+body.tv-pieno-ios                { background: #000 !important; }
+body.tv-pieno-ios #tv-frame      { padding: 0 !important; background: #000 !important; }
+body.tv-pieno-ios .tv-cabinet    { border: none !important; border-radius: 0 !important;
+                                   background: #000 !important; padding: 0 !important; }
+body.tv-pieno-ios .tv-screen     { margin: 0 !important; border: none !important;
+                                   border-radius: 0 !important; background: #000 !important; }
+body.tv-pieno-ios #yt-iframe-wrap {
+  position: fixed !important; z-index: 40 !important;
+  top: 0 !important; left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;   /* la barra di Safari va e viene: dvh la segue */
+  transform: none !important;
+  background: #000 !important;
+}
+body.tv-pieno-ios #yt-iframe,
+body.tv-pieno-ios #yt-player-div {
+  width: 100% !important; height: 100% !important; border: 0 !important; display: block !important;
+}
 html.player-sempre-vivo #tab-player:not(.active) {
   display: flex !important;
   position: fixed !important;
@@ -8774,8 +8804,10 @@ function _ytUffAggancia() {
 function _inTv() {
   var tv = document.getElementById('tab-player');
   var st = document.getElementById('screen-room');
-  return !!(tv && st && st.classList.contains('active') &&
-            getComputedStyle(tv).display !== 'none');
+  // Si guarda la classe, non il display: da quando il player resta impaginato
+  // anche fuori dalla sua scheda (serve a iOS per far partire le canzoni dalla
+  // playlist), "display diverso da none" era diventato sempre vero.
+  return !!(tv && st && st.classList.contains('active') && tv.classList.contains('active'));
 }
 var _orientStato = 'mai calcolato';
 // Su iPhone questa rotazione NON si applica, e il motivo e' che si sommava a
@@ -8790,6 +8822,25 @@ var _orientStato = 'mai calcolato';
 // e il suo tasto gestisce rotazione e schermo intero in modo nativo.
 var _iOSqui = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// Su iPhone il telefono girato porta il video a tutto schermo. NON si ruota
+// niente: li' la pagina gira gia' da sola. (La modalita' per Android ruota il
+// riquadro di 90 gradi perche' la' la finestra resta verticale, bloccata dal
+// manifesto.) I video che non sono 16:9 tengono le loro bande, ma centrate:
+// quelle le mette YouTube dentro al suo riquadro, e non si possono togliere
+// senza tagliare l'immagine.
+(function () {
+  function aggiorna() {
+    var orizzontale = window.innerWidth > window.innerHeight;
+    document.body.classList.toggle('tv-pieno-ios', !!(orizzontale && _inTv()));
+  }
+  window.__tvPienoIOS = aggiorna;          // per poterlo provare in anteprima
+  if (!_iOSqui) return;
+  window.addEventListener('resize', aggiorna, { passive: true });
+  window.addEventListener('orientationchange', function () { setTimeout(aggiorna, 300); }, { passive: true });
+  setInterval(aggiorna, 400);              // cambio scheda, uscita dalla crew
+  aggiorna();
+}());
 
 function _tvPienoSchermo(acceso) {
   if (_iOSqui) return;

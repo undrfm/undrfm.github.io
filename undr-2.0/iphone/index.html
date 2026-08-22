@@ -3935,7 +3935,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '21ago-e';
+var VERSIONE_UNDR = '22ago-swipe';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -7181,6 +7181,28 @@ body.tv-orizz #sfondo-tela { display: none !important; }
 #fm-band-card { display: none; background: #101010; border: 1px solid var(--accent-alone2, rgba(200,245,58,0.35)); border-radius: 12px; padding: 13px; margin-top: 12px; font-family: var(--mono); }
 #fm-band-card p { margin: 0 0 6px; font-size: 12px; color: #999; }
 #fm-band-card a { color: var(--accent); }
+
+/* ── SWIPE CON CONFERMA ─────────────────────────────────────
+   Il tasto rosso sta DIETRO alla riga e viene scoperto mentre lei scivola.
+   Ne basta uno solo per tutta la lista: puo' esserci una riga aperta per volta. */
+#queue-list { position: relative; }
+.queue-item { z-index: 1; }
+/* niente piu' rosso addosso alla riga: il rosso adesso e' il tasto dietro */
+.queue-item.swiping { background: rgba(255,255,255,0.055) !important; }
+.queue-item.swiping::after { content: none !important; }
+.queue-item.scivola { transition: transform 0.18s ease-out, opacity 0.18s !important; }
+#swipe-x {
+  position: absolute; z-index: 0; display: none;
+  align-items: center; justify-content: center;
+  border-radius: 16px; color: #fff; cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  background: linear-gradient(90deg, rgba(255,77,77,0.30), rgba(255,77,77,0.92));
+  border: 1px solid rgba(255,77,77,0.95);
+  box-shadow: 0 0 24px rgba(255,77,77,0.45);
+}
+#swipe-x.visibile { display: flex; }
+#swipe-x svg { width: 26px; height: 26px; display: block; }
+#swipe-x:active { background: rgba(255,77,77,1); }
 </style>
 <div id="screen-fm" class="screen">
   <div class="fm-head">
@@ -8077,52 +8099,138 @@ function broadcastProfile() {
   } catch(e) {}
 }
 
-// ══ SWIPE DX→SX PER ELIMINARE UNA TRACK DALLA CODA ══
-(function() {
-  var item = null, startX = 0, startY = 0, dx = 0, swiping = false, suppressClick = false;
-  document.addEventListener('touchstart', function(e) {
-    var list = document.getElementById('queue-list');
-    if (!list) return;
-    var t = e.target.closest ? e.target.closest('.queue-item') : null;
-    if (!t || !list.contains(t)) return;
-    item = t; startX = e.touches[0].clientX; startY = e.touches[0].clientY;
-    dx = 0; swiping = false;
-    item.style.transition = '';
-  }, { passive: true });
-  document.addEventListener('touchmove', function(e) {
-    if (!item) return;
-    dx = e.touches[0].clientX - startX;
-    var dy = e.touches[0].clientY - startY;
-    if (!swiping && Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.5) swiping = true;
-    if (swiping && dx < 0) {
-      item.style.transform = 'translateX(' + dx + 'px)';
-      item.classList.add('swiping');
-    }
-  }, { passive: true });
-  document.addEventListener('touchend', function() {
-    if (!item) return;
-    var it = item; item = null;
-    if (swiping) suppressClick = true;
-    if (swiping && dx < -90) {
+// ═══ SWIPE CON CONFERMA ════════════════════════════════════
+// Prima: trascinando oltre 90 px la traccia spariva SUBITO, senza chiedere.
+// E c'erano due difetti che si tenevano per mano:
+//
+//   1. la riga partiva di lato con appena 12 px di movimento, quindi bastava
+//      scorrere la lista col dito un po' storto per vederla scivolare;
+//   2. ogni scivolata armava un fermo sul click che si scioglieva SOLO quando
+//      arrivava un click. Ma dopo uno swipe il click non arriva mai: il fermo
+//      restava armato e si mangiava il TAP SUCCESSIVO. Era il motivo per cui
+//      toccando una canzone non partiva niente e bisognava toccarla due volte.
+//
+// Adesso la riga vive fra 0 e un terzo della sua larghezza: a destra non va
+// oltre il suo posto, a sinistra non oltre il terzo. Aperta, scopre un tasto
+// rosso con la X: si cancella SOLO toccando quello. Scorrere, toccare altrove
+// o riportare indietro la riga la richiudono e basta.
+// E soprattutto: se non c'e' nessuna riga aperta, nessun tocco viene mai
+// ingoiato — toccare una canzone la fa partire, sempre.
+(function () {
+  var SOGLIA = 96;          // quanto si apre la riga (un terzo, calcolato su misura)
+  var riga = null;          // la riga che sto trascinando adesso
+  var aperta = null;        // la riga aperta: ce n'e' al massimo una
+  var startX = 0, startY = 0, dx = 0, base = 0;
+  var deciso = false, orizzontale = false;
+  var pannello = null;
+
+  function creaPannello() {
+    if (pannello) return pannello;
+    pannello = document.createElement('div');
+    pannello.id = 'swipe-x';
+    pannello.setAttribute('aria-label', 'rimuovi');
+    pannello.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+    pannello.addEventListener('click', function (e) {
+      e.stopPropagation(); e.preventDefault();
+      var it = aperta;
+      aperta = null;
+      pannello.classList.remove('visibile');
+      if (!it || !it.isConnected) return;
       var id = it.getAttribute('data-id');
-      var stashKey = it.getAttribute('data-stash-key');
-      it.style.transition = 'transform 0.18s ease-out, opacity 0.18s';
+      var chiaveStash = it.getAttribute('data-stash-key');
+      it.classList.add('scivola');
       it.style.transform = 'translateX(-110%)';
       it.style.opacity = '0';
-      setTimeout(function() {
-        if (stashKey && typeof removeStashByKey === 'function') removeStashByKey(stashKey);
+      setTimeout(function () {
+        if (chiaveStash && typeof removeStashByKey === 'function') removeStashByKey(chiaveStash);
         else if (id && typeof removeSong === 'function') removeSong(id);
         if (typeof renderQueue === 'function') renderQueue();
       }, 180);
-    } else {
-      it.style.transition = 'transform 0.18s';
-      it.style.transform = '';
-      setTimeout(function() { it.classList.remove('swiping'); }, 200);
-    }
+    });
+    return pannello;
+  }
+
+  function mettiPannello(it) {
+    var lista = document.getElementById('queue-list');
+    if (!lista || !it) return;
+    var p = creaPannello();
+    if (p.parentNode !== lista) lista.appendChild(p);
+    p.style.top = it.offsetTop + 'px';
+    p.style.height = it.offsetHeight + 'px';
+    p.style.right = Math.max(0, lista.clientWidth - (it.offsetLeft + it.offsetWidth)) + 'px';
+    p.style.width = SOGLIA + 'px';
+    p.classList.add('visibile');
+  }
+
+  function chiudi() {
+    var it = aperta;
+    aperta = null;
+    if (pannello) pannello.classList.remove('visibile');
+    if (!it || !it.isConnected) return;
+    it.classList.add('scivola');
+    it.style.transform = '';
+    setTimeout(function () { it.classList.remove('swiping', 'scivola'); }, 200);
+  }
+
+  document.addEventListener('touchstart', function (e) {
+    var lista = document.getElementById('queue-list');
+    if (!lista) return;
+    var t = e.target.closest ? e.target.closest('.queue-item') : null;
+    if (!t || !lista.contains(t)) return;
+    riga = t;
+    SOGLIA = Math.max(76, Math.round(t.offsetWidth / 3));
+    startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+    dx = 0; deciso = false; orizzontale = false;
+    base = (aperta === t) ? -SOGLIA : 0;
+    t.classList.remove('scivola');
   }, { passive: true });
-  // dopo uno swipe, il tap non deve contare come click (jumpTo)
-  document.addEventListener('click', function(e) {
-    if (suppressClick) { suppressClick = false; e.stopPropagation(); e.preventDefault(); }
+
+  document.addEventListener('touchmove', function (e) {
+    if (!riga) return;
+    dx = e.touches[0].clientX - startX;
+    var dy = e.touches[0].clientY - startY;
+    if (!deciso) {
+      // Si aspetta un movimento vero (24 px) e poi si sceglie UNA volta sola:
+      // o stai scorrendo, o stai scartando la riga. Prima si rivalutava a ogni
+      // millimetro, ed e' per questo che la lista scivolava di lato da sola.
+      if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
+      deciso = true;
+      orizzontale = Math.abs(dx) > Math.abs(dy) * 2;
+      if (!orizzontale) { riga = null; chiudi(); return; }
+      if (aperta && aperta !== riga) chiudi();
+      riga.classList.add('swiping');
+      mettiPannello(riga);
+    }
+    riga.style.transform = 'translateX(' + Math.max(-SOGLIA, Math.min(0, base + dx)) + 'px)';
+  }, { passive: true });
+
+  function finito() {
+    if (!riga) return;
+    var it = riga; riga = null;
+    if (!orizzontale) return;
+    it.classList.add('scivola');
+    if (Math.max(-SOGLIA, Math.min(0, base + dx)) <= -SOGLIA / 2) {
+      it.style.transform = 'translateX(' + (-SOGLIA) + 'px)';
+      aperta = it;
+      mettiPannello(it);
+    } else {
+      aperta = it;   // chiudi() la riporta a posto e ripulisce le classi
+      chiudi();
+    }
+  }
+  document.addEventListener('touchend', finito, { passive: true });
+  document.addEventListener('touchcancel', finito, { passive: true });
+
+  // Scorrere richiude. Non mentre stai trascinando, ovviamente.
+  window.addEventListener('scroll', function () { if (!riga && aperta) chiudi(); }, true);
+
+  document.addEventListener('click', function (e) {
+    if (pannello && (e.target === pannello || pannello.contains(e.target))) return;  // la X ha il suo
+    if (!aperta) return;              // NIENTE aperto: il tocco passa sempre, la canzone parte
+    if (!aperta.isConnected) { aperta = null; if (pannello) pannello.classList.remove('visibile'); return; }
+    e.stopPropagation(); e.preventDefault();   // c'e' una riga aperta: questo tocco la richiude
+    chiudi();
   }, true);
 })();
 </script>

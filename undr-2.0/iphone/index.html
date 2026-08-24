@@ -3941,7 +3941,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '22ago-riempi3';
+var VERSIONE_UNDR = '23ago-unico';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -7195,13 +7195,17 @@ body.tv-orizz #sfondo-tela { display: none !important; }
    combaciano mai davvero: restava sempre un filo di luce sulla giunzione.
    Con un elemento solo la giunzione non esiste — il rettangolo si allunga e
    il suo terzo destro diventa rosso, in dissolvenza. */
-#queue-list, .queue-list {
-  position: relative;
+#queue-list, .queue-list { position: relative; }   /* serve al rosso dello swipe */
+
+/* SOLO iPHONE. Su Android e su computer la lista non si trascina di lato,
+   quindi queste righe non servono e restano spente: entrano in funzione solo
+   se il telefono e' un iPhone (classe 'melo' sul documento). */
+html.melo #queue-list, html.melo .queue-list {
   overflow-x: hidden !important;
   touch-action: pan-y !important;
   overscroll-behavior-x: none !important;
 }
-#tab-queue { touch-action: pan-y; overscroll-behavior-x: none; }
+html.melo #tab-queue { touch-action: pan-y; overscroll-behavior-x: none; }
 
 /* --sw e' quanto e' aperta la riga, in pixel, negativo. Lo scrive il codice.
    NIENTE si sposta: copertina, titolo e artista restano dove sono. E' solo il
@@ -7257,66 +7261,7 @@ body.tv-orizz #sfondo-tela { display: none !important; }
    messo fuori dallo schermo, cosi' toccando una canzone dalla playlist
    parte davvero, restando nella playlist. Posizione fissa: non sposta
    nulla nell'impaginazione. */
-/* ── TV A TUTTO SCHERMO SU iPHONE ─────────────────────────────
-   Stessa idea di body.tv-orizz (che serve ad Android), ma senza rotazione:
-   su iPhone la pagina gira gia' da sola, ruotare di nuovo raddoppierebbe. */
-body.tv-pieno-ios .room-header,
-body.tv-pieno-ios .tabbar-bottom,
-body.tv-pieno-ios .tv-logo-row,
-body.tv-pieno-ios .tv-antennas,
-body.tv-pieno-ios .tv-ticker-row,
-body.tv-pieno-ios .tv-controls,
-body.tv-pieno-ios .aurora,
-body.tv-pieno-ios .blob          { display: none !important; }
-body.tv-pieno-ios                { background: #000 !important; }
-body.tv-pieno-ios #tv-frame      { padding: 0 !important; background: #000 !important; }
-body.tv-pieno-ios .tv-cabinet    { border: none !important; border-radius: 0 !important;
-                                   background: #000 !important; padding: 0 !important; }
-body.tv-pieno-ios .tv-screen     { margin: 0 !important; border: none !important;
-                                   border-radius: 0 !important; background: #000 !important; }
-body.tv-pieno-ios #yt-iframe-wrap {
-  overflow: hidden !important;   /* in RIEMPI il video sborda: qui viene tagliato */
-  position: fixed !important; z-index: 40 !important;
-  /* Tutti e quattro i lati a zero, e NIENTE misure. Un elemento fisso si
-     ancora alla finestra di impaginazione: mettendogli 100vw/100dvh (o dei
-     pixel presi da visualViewport, che misura la finestra VISIBILE) si
-     mescolano due sistemi di riferimento diversi. Su desktop coincidono, su
-     iPhone no — e la differenza esce tutta da un lato solo. Con inset a zero
-     il riquadro E' l'area della finestra, per definizione. */
-  top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
-  width: auto !important; height: auto !important;
-  transform: none !important;
-  background: #000 !important;
-}
-body.tv-pieno-ios #yt-player-div {
-  width: 100% !important; height: 100% !important; border: 0 !important; display: block !important;
-}
-body.tv-pieno-ios #yt-iframe { border: 0 !important; display: block !important; }
-
-/* Il pulsantino sta in alto a destra: in basso ci sono i comandi di YouTube
-   e in alto a sinistra il titolo del video. Volutamente smorto, per non
-   dare fastidio mentre guardi. */
-#tv-adatta { display: none; }
-body.tv-pieno-ios #tv-adatta {
-  display: block;
-  position: fixed; z-index: 41;
-  top: calc(10px + env(safe-area-inset-top, 0px));
-  right: calc(12px + env(safe-area-inset-right, 0px));
-  padding: 7px 13px; border-radius: 999px;
-  background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3);
-  color: rgba(255,255,255,0.85);
-  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  opacity: 0.55; cursor: pointer;
-  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
-}
-body.tv-pieno-ios #tv-adatta:active { opacity: 1; background: rgba(0,0,0,0.8); }
-body.tv-pieno-ios #tv-adatta.numeri {
-  opacity: 1; background: rgba(0,0,0,0.88); border-radius: 12px;
-  white-space: pre; text-align: left; line-height: 1.7; letter-spacing: 0.04em;
-  font-size: 10px; padding: 10px 12px;
-}
-html.player-sempre-vivo #tab-player:not(.active) {
+html.melo #tab-player:not(.active) {
   display: flex !important;
   position: fixed !important;
   left: -10000px !important; top: 0 !important;
@@ -7325,11 +7270,11 @@ html.player-sempre-vivo #tab-player:not(.active) {
 }
 /* e dentro, misure vere: un iframe alto zero per WebKit non esiste, e non
    fa partire niente. Qui gli si da' un 320x180 pieno. */
-html.player-sempre-vivo #tab-player:not(.active) #yt-iframe-wrap {
+html.melo #tab-player:not(.active) #yt-iframe-wrap {
   width: 320px !important; height: 180px !important; display: block !important;
 }
-html.player-sempre-vivo #tab-player:not(.active) #yt-iframe,
-html.player-sempre-vivo #tab-player:not(.active) #yt-player-div {
+html.melo #tab-player:not(.active) #yt-iframe,
+html.melo #tab-player:not(.active) #yt-player-div {
   width: 320px !important; height: 180px !important; display: block !important;
 }
 
@@ -8246,7 +8191,7 @@ function broadcastProfile() {
 // o riportare indietro la riga la richiudono e basta.
 // E soprattutto: se non c'e' nessuna riga aperta, nessun tocco viene mai
 // ingoiato — toccare una canzone la fa partire, sempre.
-// Su iOS un iframe dentro un ramo display:none non puo' far partire niente, e
+// SOLO iPHONE. Su iOS un iframe dentro un ramo display:none non puo' far partire niente, e
 // le schede non attive sono esattamente questo (.tab-content { display: none }).
 // Stando nella playlist il player era spento, quindi toccare una canzone non
 // faceva partire nulla: bisognava passare dalla scheda TV per farlo esistere
@@ -8257,7 +8202,7 @@ function broadcastProfile() {
 try {
   if (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
-    document.documentElement.classList.add('player-sempre-vivo');
+    document.documentElement.classList.add('melo');
   }
 } catch (e) {}
 
@@ -8851,166 +8796,6 @@ var _orientStato = 'mai calcolato';
 // e il suo tasto gestisce rotazione e schermo intero in modo nativo.
 var _iOSqui = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
-// Su iPhone il telefono girato porta il video a tutto schermo. NON si ruota
-// niente: li' la pagina gira gia' da sola. (La modalita' per Android ruota il
-// riquadro di 90 gradi perche' la' la finestra resta verticale, bloccata dal
-// manifesto.) I video che non sono 16:9 tengono le loro bande, ma centrate:
-// quelle le mette YouTube dentro al suo riquadro, e non si possono togliere
-// senza tagliare l'immagine.
-(function () {
-  // Le unita' 100vw / 100dvh su iPhone NON corrispondono all'area davvero
-  // visibile: cambiano con le barre di Safari e con le zone sicure attorno
-  // alla tacca. Se il riquadro non coincide con lo schermo, YouTube centra il
-  // video dentro un riquadro storto — ed ecco la banda nera piu' larga da un
-  // lato. Quindi lo schermo lo MISURO, e scrivo i pixel veri.
-  function misura() {
-    var w = document.getElementById('yt-iframe-wrap');
-    if (!w) return;
-    w.style.removeProperty('left');
-    w.style.removeProperty('top');
-    if (!document.body.classList.contains('tv-pieno-ios')) {
-      // si rimettono i valori del riposo (quelli scritti nel corpo pagina)
-      w.style.setProperty('width', '100%');
-      w.style.setProperty('height', '100%');
-      riposoVideo();   // NON misuraVideo: con misure zero azzerava il video
-      return;
-    }
-    // Le misure scritte a mano se ne vanno: al riquadro ci pensa inset: 0.
-    w.style.removeProperty('width');
-    w.style.removeProperty('height');
-    // e per il taglio di RIEMPI si legge quanto e' venuto DAVVERO grande,
-    // invece di indovinarlo con delle unita'
-    var r = w.getBoundingClientRect();
-    misuraVideo(Math.round(r.width), Math.round(r.height));
-  }
-
-  // ADATTA: il riquadro del video e' grande quanto lo schermo e ci pensa
-  //   YouTube a far stare dentro l'immagine, qualunque forma abbia. Restano
-  //   le bande, ma uguali dai due lati.
-  // RIEMPI: il riquadro si fa PIU' GRANDE dello schermo, quanto serve perche'
-  //   un 16:9 lo copra tutto, e quello che avanza viene tagliato. Niente
-  //   bande, ma sopra e sotto (o ai lati) si perde un pezzo di immagine.
-  // il video torna com'e' scritto nel corpo pagina: tutto il suo riquadro
-  function riposoVideo() {
-    var ifr = document.getElementById('yt-iframe');
-    if (!ifr) return;
-    ifr.style.setProperty('width', '100%');
-    ifr.style.setProperty('height', '100%');
-    ifr.style.setProperty('left', '0px');
-    ifr.style.setProperty('top', '0px');
-    ifr.style.setProperty('right', '0px');
-    ifr.style.setProperty('bottom', '0px');
-  }
-  function misuraVideo(L, A) {
-    var ifr = document.getElementById('yt-iframe');
-    if (!ifr) return;
-    if (!document.body.classList.contains('tv-riempi')) { riposoVideo(); return; }
-    var l, a, forma = 16 / 9;
-    if (L / A > forma) { l = L; a = Math.ceil(L / forma); }   // schermo piu' lungo del video
-    else               { a = A; l = Math.ceil(A * forma); }   // schermo piu' alto
-    ifr.style.setProperty('width',  l + 'px', 'important');
-    ifr.style.setProperty('height', a + 'px', 'important');
-    ifr.style.setProperty('left', Math.round((L - l) / 2) + 'px', 'important');
-    ifr.style.setProperty('top',  Math.round((A - a) / 2) + 'px', 'important');
-    ifr.style.setProperty('right',  'auto', 'important');
-    ifr.style.setProperty('bottom', 'auto', 'important');
-  }
-  // Il doppio tocco SUL VIDEO non e' possibile: quella superficie e' l'iframe
-  // di YouTube, che e' di un altro sito e si prende lui i tocchi. Metterci
-  // sopra uno strato per intercettarli vorrebbe dire bloccare i comandi di
-  // YouTube. Quindi: un pulsantino, in un angolo dove non da' fastidio.
-  var tasto = null;
-  function creaTasto() {
-    if (tasto) return tasto;
-    tasto = document.createElement('button');
-    tasto.id = 'tv-adatta';
-    tasto.type = 'button';
-    var timerPremuto = null;
-    function mostraNumeri() {
-      tasto.dataset.numeri = '1';
-      tasto.textContent = numeri();
-      tasto.classList.add('numeri');
-      setTimeout(function () {
-        tasto.dataset.numeri = '0';
-        tasto.classList.remove('numeri');
-        scriviTasto();
-      }, 12000);
-    }
-    tasto.addEventListener('touchstart', function () {
-      clearTimeout(timerPremuto);
-      timerPremuto = setTimeout(mostraNumeri, 650);
-    }, { passive: true });
-    ['touchend', 'touchcancel', 'touchmove'].forEach(function (ev) {
-      tasto.addEventListener(ev, function () { clearTimeout(timerPremuto); }, { passive: true });
-    });
-    tasto.addEventListener('contextmenu', function (e) { e.preventDefault(); mostraNumeri(); });
-    tasto.addEventListener('click', function (e) {
-      e.stopPropagation(); e.preventDefault();
-      if (tasto.dataset.numeri === '1') return;   // sto guardando i numeri
-      var ora = document.body.classList.toggle('tv-riempi');
-      try { localStorage.setItem('undr-tv-riempi', ora ? '1' : '0'); } catch (err) {}
-      scriviTasto();
-      misura();
-    });
-    document.body.appendChild(tasto);
-    return tasto;
-  }
-  // La scritta dice cosa SUCCEDE se lo premi, non dove sei adesso: se il video
-  // e' stretto il tasto dice RIEMPI, se e' pieno dice ADATTA.
-  function scriviTasto() {
-    if (!tasto || tasto.dataset.numeri === '1') return;
-    tasto.textContent = document.body.classList.contains('tv-riempi') ? 'ADATTA' : 'RIEMPI';
-  }
-
-  // Tenendo premuto il tasto compaiono le misure vere dello schermo e del
-  // riquadro: se il video risultasse ancora storto, bastano questi numeri per
-  // capire da dove viene lo spostamento, senza tirare a indovinare.
-  function numeri() {
-    var w = document.getElementById('yt-iframe-wrap');
-    var ifr = document.getElementById('yt-iframe');
-    var rw = w ? w.getBoundingClientRect() : { left: 0, width: 0 };
-    var ri = ifr ? ifr.getBoundingClientRect() : { left: 0, width: 0 };
-    var vv = window.visualViewport;
-    var prova = document.createElement('div');
-    prova.style.cssText = 'position:fixed;left:env(safe-area-inset-left,0px);top:0;width:1px;height:1px';
-    document.body.appendChild(prova);
-    var sinistraSicura = Math.round(prova.getBoundingClientRect().left);
-    prova.style.left = 'auto'; prova.style.right = 'env(safe-area-inset-right,0px)';
-    var destraSicura = Math.round(window.innerWidth - prova.getBoundingClientRect().right);
-    prova.parentNode.removeChild(prova);
-    return [
-      'finestra   ' + window.innerWidth + ' x ' + window.innerHeight,
-      'impagin.   ' + document.documentElement.clientWidth + ' x ' + document.documentElement.clientHeight,
-      'visibile   ' + (vv ? Math.round(vv.width) + ' x ' + Math.round(vv.height) + '  scarto ' + Math.round(vv.offsetLeft || 0) : '-'),
-      'riquadro   da ' + Math.round(rw.left) + ' largo ' + Math.round(rw.width),
-      'video      da ' + Math.round(ri.left) + ' largo ' + Math.round(ri.width),
-      'zone sic.  sx ' + sinistraSicura + '  dx ' + destraSicura
-    ].join(String.fromCharCode(10));
-  }
-  try {
-    if (localStorage.getItem('undr-tv-riempi') === '1') document.body.classList.add('tv-riempi');
-  } catch (e) {}
-
-  function aggiorna() {
-    var orizzontale = window.innerWidth > window.innerHeight;
-    var pieno = !!(orizzontale && _inTv());
-    document.body.classList.toggle('tv-pieno-ios', pieno);
-    if (pieno) { creaTasto(); scriviTasto(); }
-    misura();
-  }
-  window.__tvPienoIOS = aggiorna;          // per poterlo provare in anteprima
-  if (!_iOSqui) return;
-  window.addEventListener('resize', aggiorna, { passive: true });
-  window.addEventListener('orientationchange', function () { setTimeout(aggiorna, 300); setTimeout(aggiorna, 700); }, { passive: true });
-  // le barre di Safari entrano ed escono: il riquadro le segue
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', misura, { passive: true });
-    window.visualViewport.addEventListener('scroll', misura, { passive: true });
-  }
-  setInterval(aggiorna, 400);              // cambio scheda, uscita dalla crew
-  aggiorna();
-}());
 
 function _tvPienoSchermo(acceso) {
   if (_iOSqui) return;

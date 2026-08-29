@@ -2298,7 +2298,8 @@ function jumpTo(idx) {
 }
 
 function prevTrack() {
-  if (currentIdx > 0) { currentIdx--; playTrack(currentIdx, true); }
+  // "indietro" e' la riga SOPRA, cioe' la piu' recente: indice piu' alto
+  if (currentIdx < queue.length - 1) { currentIdx++; playTrack(currentIdx, true); }
 }
 
 function toggleLoop() {
@@ -2402,10 +2403,15 @@ function _avanzaTraccia() {
       if (!restanti.length) restanti.push(currentIdx);   // una sola traccia in coda
     }
     currentIdx = restanti[Math.floor(Math.random() * restanti.length)];
-  } else if (currentIdx < queue.length - 1) {
-    currentIdx++;
+  } else if (currentIdx > 0) {
+    // La lista si guarda dalla piu' recente (in cima) alla piu' vecchia (in
+    // fondo), quindi "la prossima" e' la riga SOTTO: indice piu' basso. Cosi'
+    // l'evidenziatore scende insieme alla riproduzione invece di risalire.
+    // La coda vera non si tocca: cambia solo il verso in cui la si percorre,
+    // e ognuno la percorre per conto suo.
+    currentIdx--;
   } else if (_loopEnabled) {
-    currentIdx = 0;
+    currentIdx = queue.length - 1;   // arrivati in fondo: si riparte dalla cima
   } else {
     return;
   }
@@ -3941,7 +3947,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '23ago-unico';
+var VERSIONE_UNDR = '23ago-verso';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;

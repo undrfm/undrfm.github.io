@@ -2212,6 +2212,22 @@ function _updateNpHero(cur, cc, tu, bars) {
       '<div class="nph-t">' + escHtml(cc.song) + '</div>' +
       '<div class="nph-s"><span class="nph-bars">' + bars + '</span>' + escHtml(sotto.toUpperCase()) + '</div>' +
     '</div>' +
+    '<div class="nph-cmd">' +
+      '<button type="button" class="nph-b" aria-label="traccia precedente" ' +
+        'onclick="event.stopPropagation(); prevTrack();">' +
+        '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">' +
+        '<path d="M7 6h2.2v12H7z"/>' +
+        '<path d="M18.6 6.6v10.8c0 .55-.62.87-1.07.55l-7.7-5.4a.67.67 0 010-1.1l7.7-5.4c.45-.32 1.07 0 1.07.55z"/>' +
+        '</svg>' +
+      '</button>' +
+      '<button type="button" class="nph-b" aria-label="traccia successiva" ' +
+        'onclick="event.stopPropagation(); nextTrack();">' +
+        '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">' +
+        '<path d="M14.8 6H17v12h-2.2z"/>' +
+        '<path d="M5.4 6.6v10.8c0 .55.62.87 1.07.55l7.7-5.4a.67.67 0 000-1.1l-7.7-5.4c-.45-.32-1.07 0-1.07.55z"/>' +
+        '</svg>' +
+      '</button>' +
+    '</div>' +
     '<div class="nph-prog" id="nph-prog"></div>';
   hero.style.display = 'block';
 }
@@ -3947,7 +3963,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '23ago-verso';
+var VERSIONE_UNDR = '23ago-tasti';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -7194,6 +7210,26 @@ body.tv-orizz #sfondo-tela { display: none !important; }
 #fm-band-card p { margin: 0 0 6px; font-size: 12px; color: #999; }
 #fm-band-card a { color: var(--accent); }
 
+/* ── AVANTI E INDIETRO SULLA CARD ORA IN ONDA ────────────────────
+   In basso a destra, sopra il velo. La didascalia si accorcia di quel tanto
+   che basta perche' il titolo non finisca sotto ai tasti. */
+#np-hero .nph-cmd {
+  position: absolute; right: 12px; bottom: 11px; z-index: 2;
+  display: flex; gap: 8px;
+}
+#np-hero .nph-b {
+  width: 34px; height: 34px; padding: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(7,6,10,0.6);
+  border: 1px solid var(--accent-alone2, rgba(200,245,58,0.35));
+  color: var(--accent); cursor: pointer;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  transition: background 0.15s, color 0.15s;
+}
+#np-hero .nph-b:active { background: var(--accent); color: #07060a; }
+#np-hero .nph-b svg { display: block; }
+#np-hero .nph-cap { right: 96px; }
 /* ── SWIPE CON CONFERMA ─────────────────────────────────────
    UN PEZZO SOLO. Il rettangolo della traccia non si sposta: scivola il suo
    CONTENUTO, e il rosso e' lo sfondo del rettangolo stesso.

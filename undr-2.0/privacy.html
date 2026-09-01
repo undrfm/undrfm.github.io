@@ -43,6 +43,20 @@
   .rilievo p:last-child { margin-bottom: 0; }
   code, .mono { font-family: var(--mono); font-size: 13px; color: var(--acc); }
   a { color: var(--acc); }
+  details { margin: 14px 0 4px; }
+  summary {
+    cursor: pointer; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
+    color: var(--acc); padding: 9px 12px; border: 1px solid var(--bordo);
+    border-radius: 10px; background: var(--sup); list-style: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: '+ '; }
+  details[open] summary::before { content: '– '; }
+  details[open] summary { border-radius: 10px 10px 0 0; border-bottom: none; }
+  details[open] .servizi {
+    border: 1px solid var(--bordo); border-top: none;
+    border-radius: 0 0 10px 10px; padding: 4px 14px 10px;
+  }
   .servizi { font-family: var(--mono); font-size: 12px; color: var(--tenue); }
   .servizi div { padding: 5px 0; border-bottom: 1px dashed var(--bordo); }
   .servizi div:last-child { border-bottom: none; }
@@ -135,20 +149,25 @@
 
   <h2>CHI ALTRO RICEVE QUALCOSA</h2>
 
-  <p>UNDR non ha server propri per la musica: usa servizi di terzi, che ricevono almeno il tuo
-  indirizzo IP nel momento in cui vengono contattati.</p>
+  <p>UNDR non ha server propri per la musica. Il video lo riproduce <strong>YouTube</strong> (o
+  Vimeo) col suo lettore, e per far collegare fra loro i dispositivi servono un paio di servizi
+  tecnici. Tutti costoro ricevono almeno il tuo indirizzo IP nel momento in cui vengono
+  contattati — è inevitabile: è così che due computer si parlano.</p>
 
-  <div class="servizi">
-    <div><b>YouTube / Google</b> riproduce i video. Usiamo la variante senza cookie, ma dal
-      momento in cui parte un video valgono le loro condizioni.</div>
-    <div><b>Vimeo</b> come sopra, per i video Vimeo.</div>
-    <div><b>PeerJS</b> mette in contatto i dispositivi fra loro. Non vede i contenuti.</div>
-    <div><b>Server STUN/TURN</b> servono a stabilire il collegamento quando le reti sono chiuse.</div>
-    <div><b>Supabase</b> ospita il database delle crew.</div>
-    <div><b>MusicBrainz</b> archivio musicale libero, per risalire all'artista vero di un brano.</div>
-    <div><b>noembed e istanze Invidious</b> per titolo, copertina e durata di un video.</div>
-    <div><b>Google Fonts e jsDelivr</b> forniscono caratteri e una libreria.</div>
-  </div>
+  <details>
+    <summary>L'elenco completo, per chi vuole i dettagli</summary>
+    <div class="servizi">
+      <div><b>YouTube / Google</b> riproduce i video. Usiamo la variante senza cookie, ma dal
+        momento in cui parte un video valgono le loro condizioni.</div>
+      <div><b>Vimeo</b> come sopra, per i video Vimeo.</div>
+      <div><b>PeerJS</b> mette in contatto i dispositivi fra loro. Non vede i contenuti.</div>
+      <div><b>Server STUN/TURN</b> servono a stabilire il collegamento quando le reti sono chiuse.</div>
+      <div><b>Supabase</b> ospita il database delle crew.</div>
+      <div><b>MusicBrainz</b> archivio musicale libero, per risalire all'artista vero di un brano.</div>
+      <div><b>noembed</b> per titolo e copertina di un video.</div>
+      <div><b>Google Fonts e jsDelivr</b> forniscono caratteri e una libreria.</div>
+    </div>
+  </details>
 
   <h2>MUSICA E DIRITTI D'AUTORE</h2>
 

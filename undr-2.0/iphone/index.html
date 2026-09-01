@@ -12,7 +12,7 @@
 <meta name="msapplication-tap-highlight" content="no">
 <link rel="manifest" id="pwa-manifest">
 <link rel="apple-touch-icon" id="apple-icon">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://localhost tauri://localhost capacitor://localhost; script-src 'self' 'unsafe-inline' blob: https://cdn.jsdelivr.net https://www.youtube.com https://s.ytimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com https://i.vimeocdn.com; frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; media-src 'self' blob: data:; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; connect-src 'self' blob: https://localhost https://cebssqzlzvekytgzrqju.supabase.co https://soyvmntqgpydansubrdw.supabase.co https://noembed.com https://musicbrainz.org https://www.youtube.com https://y.com.sb https://invidious.jing.rocks https://inv.nadeko.net https://invidious.privacyredirect.com https://iv.melmac.space https://invidious.f5.si https://yt.artemislena.eu https://invidious.protokolla.fi https://invidious.nerdvpn.de wss://0.peerjs.com https://0.peerjs.com">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://localhost tauri://localhost capacitor://localhost; script-src 'self' 'unsafe-inline' blob: https://cdn.jsdelivr.net https://www.youtube.com https://s.ytimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com https://i.vimeocdn.com; frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; media-src 'self' blob: data:; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; connect-src 'self' blob: https://localhost https://cebssqzlzvekytgzrqju.supabase.co https://soyvmntqgpydansubrdw.supabase.co https://noembed.com https://musicbrainz.org https://www.youtube.com wss://0.peerjs.com https://0.peerjs.com">
 <title>UNDR</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap');
@@ -2026,19 +2026,7 @@ async function addSong() {
       song.thumb = meta.thumb || '';
       song.duration = meta.duration || 0;
       risolviArtista(song);
-      // Se duration mancante, prova a recuperarla dalla pagina YouTube
-      if (song.duration === 0 && parsed.source !== 'vimeo') {
-        fetchYTDuration(parsed.id).then(dur => {
-          if (dur > 0) {
-            song.duration = dur;
-            savelearnedDuration('youtube', parsed.id, dur);
-            if (queue[currentIdx]?.id === songId) {
-              _progressDuration = dur;
-              _setupAutoNextWatchdog();
-            }
-          }
-        });
-      }
+      // La durata arriva dal lettore ufficiale quando si suona, e da li viaggia con la traccia.
       renderQueue();
       if (queue[currentIdx]?.id === songId) {
         const _ct2 = cleanTitle(song);
@@ -2651,18 +2639,6 @@ function playTrack(idx, autoplay) {
   if (_progressDuration) updateTimeDur(_progressDuration);
   else updateTimeDur(0);
   startProgressSimulation();
-  // Brani vecchi/ripristinati senza durata: con origin locale la durata NON arriva da YouTube,
-  // quindi la recupero ORA da Invidious e armo l'auto-next → sa quando finisce la canzone.
-  if (!_progressDuration && source !== 'vimeo') {
-    const _vid = s.videoId;
-    fetchYTDuration(_vid).then(function(dur){
-      if (dur > 0 && queue[currentIdx] && queue[currentIdx].videoId === _vid) {
-        _progressDuration = dur;
-        savelearnedDuration('youtube', _vid, dur);
-        if (_progressRunning) _setupAutoNextWatchdog();
-      }
-    });
-  }
   // auto-next gestito da progress tick
   setAudioStatus('playing', getLang().playing || 'in riproduzione');
   setupMediaSession();
@@ -2694,27 +2670,14 @@ async function fetchMeta(source, videoId) {
   }
 }
 
-async function fetchYTDuration(videoId) {
-  // Durata del brano da istanze Invidious (CORS aperto). Le interrogo TUTTE in parallelo:
-  // vince la prima che risponde → veloce e resistente alle istanze morte.
-  const instances = [
-    'https://y.com.sb',
-    'https://invidious.jing.rocks',
-    'https://inv.nadeko.net',
-    'https://invidious.privacyredirect.com',
-    'https://iv.melmac.space',
-    'https://invidious.f5.si',
-    'https://yt.artemislena.eu',
-    'https://invidious.protokolla.fi',
-    'https://invidious.nerdvpn.de'
-  ];
-  const tries = instances.map(function(base) {
-    return fetch(base + '/api/v1/videos/' + videoId + '?fields=lengthSeconds', { signal: AbortSignal.timeout(6000) })
-      .then(function(r){ if (!r.ok) throw 0; return r.json(); })
-      .then(function(d){ if (d && d.lengthSeconds > 0) return d.lengthSeconds; throw 0; });
-  });
-  try { return await Promise.any(tries); } catch(e) { return 0; }
-}
+// LA RICERCA DELLA DURATA SU INVIDIOUS E- STATA TOLTA (02/09/2026).
+// Interrogava nove istanze per sapere quanto dura un video. Provate tutte e
+// nove dal browser, sull-indirizzo vero del sito: NON NE RISPONDE NESSUNA
+// (DNS morti, 401, 403, 404, SSL rotto). Erano nove richieste fallite per ogni
+// traccia, nove siti di terzi nella regola di sicurezza e l-esposizione ai
+// termini di YouTube, in cambio di niente.
+// La durata la da il lettore ufficiale (infoDelivery) e da li viaggia con la
+// traccia, nel cloud e in P2P: chi entra dopo se la ritrova. NON RIMETTERLA.
 
 function seekTo(e) {
   if (!_progressDuration || _progressDuration < 5) return;
@@ -3959,7 +3922,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '02set-privacy2';
+var VERSIONE_UNDR = '02set-pulizia';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;

@@ -3959,7 +3959,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '02set-noBG';
+var VERSIONE_UNDR = '02set-privacy2';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -5935,7 +5935,20 @@ body::before, body::after { display: none !important; }
 /* stando in basso, l'elenco delle crew deve aprirsi verso l'ALTO */
 #crew-dropdown { top: auto !important; bottom: calc(100% + 6px) !important; }
 #landing-or      { display: none !important; }   /* separatore "or" */
-#landing-privacy { display: none !important; }   /* riga "privacy" a fisarmonica */
+/* La riga privacy era nascosta dal tema per pulizia grafica. Ma dentro c'e'
+   l'avviso che l'IP e visibile agli altri della crew: nasconderlo vuol dire
+   non dirlo a nessuno. Rimessa, e vestita per non stonare. */
+#landing-privacy { display: block; margin-top: 12px !important; }
+#landing-privacy > button {
+  font-family: var(--mono) !important; font-size: 9px !important;
+  letter-spacing: 0.2em !important; color: var(--muted) !important;
+  display: flex !important; align-items: center; justify-content: center; gap: 8px;
+  opacity: 0.8;
+}
+#landing-privacy .ip-text {
+  font-size: 10px !important; line-height: 1.7 !important;
+  color: var(--muted) !important; padding: 4px 10px 2px;
+}
 #landing-ticker  { display: none !important; }   /* striscia scorrevole */
 #alias-dice      { display: none !important; }   /* dado "alias casuale" nel campo ALIAS */
 #join-pwd-eye    { display: none !important; }   /* occhio "mostra password" */
@@ -7162,6 +7175,15 @@ body.tv-orizz #sfondo-tela { display: none !important; }
       </button>
       <div id="acc-privacy-join" class="accordion-body">
         <p class="ip-text">IL TUO IP È VISIBILE · USA UNA <span style="color:var(--accent);">VPN</span> CON SCONOSCIUTI</p>
+
+        <!-- Rimando all'informativa completa. Nessun testo nuovo da tradurre:
+             la parola PRIVACY e l'indirizzo valgono in tutte le lingue, e i
+             contenuti (compresa la mail per le rimozioni) stanno in una pagina
+             sola, che si aggiorna senza toccare l'app. -->
+        <a class="link-privacy" href="https://undrfm.github.io/undr-2.0/privacy.html"
+           target="_blank" rel="noopener noreferrer">
+          PRIVACY<span>undrfm.github.io/undr-2.0/privacy</span>
+        </a>
       </div>
     </div>
 
@@ -7206,6 +7228,17 @@ body.tv-orizz #sfondo-tela { display: none !important; }
 #fm-band-card p { margin: 0 0 6px; font-size: 12px; color: #999; }
 #fm-band-card a { color: var(--accent); }
 
+/* ── RIMANDO ALL'INFORMATIVA ──────────────────────────────── */
+.link-privacy {
+  display: block; text-align: center; text-decoration: none;
+  margin-top: 9px; font-family: var(--mono); font-size: 9px;
+  letter-spacing: 0.2em; color: var(--accent); opacity: 0.75;
+}
+.link-privacy span {
+  display: block; margin-top: 3px; letter-spacing: 0.06em;
+  font-size: 9px; color: var(--muted); opacity: 0.9;
+}
+.link-privacy:active { opacity: 1; }
 /* ── AVANTI E INDIETRO SULLA CARD ORA IN ONDA ────────────────────
    In basso a destra, sopra il velo. La didascalia si accorcia di quel tanto
    che basta perche' il titolo non finisca sotto ai tasti. */

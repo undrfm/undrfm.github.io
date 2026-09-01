@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UNDR — Privacy e segnalazioni</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07060a; --sup: rgba(255,255,255,0.045); --bordo: rgba(255,255,255,0.14);
+    --testo: #e9e4f2; --tenue: #a49bbd; --acc: #c8f53a;
+    --sans: 'Space Grotesk', system-ui, sans-serif; --mono: 'Space Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--testo); font-family: var(--sans);
+    line-height: 1.65; padding: 40px 20px 80px; -webkit-font-smoothing: antialiased;
+  }
+  .foglio { max-width: 720px; margin: 0 auto; }
+  .torna {
+    display: inline-block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+    color: var(--tenue); text-decoration: none; border: 1px solid var(--bordo);
+    border-radius: 999px; padding: 7px 14px; margin-bottom: 28px;
+  }
+  .torna:hover { color: var(--acc); border-color: var(--acc); }
+  h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 6px; }
+  .sotto { font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; color: var(--acc); margin-bottom: 34px; }
+  h2 {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.18em; color: var(--acc);
+    margin: 36px 0 12px; padding-top: 20px; border-top: 1px solid var(--bordo);
+  }
+  p { margin-bottom: 14px; color: var(--testo); }
+  .tenue { color: var(--tenue); }
+  ul { margin: 0 0 14px 18px; }
+  li { margin-bottom: 7px; }
+  strong { color: #fff; font-weight: 600; }
+  .rilievo {
+    background: var(--sup); border: 1px solid var(--bordo); border-left: 2px solid var(--acc);
+    border-radius: 10px; padding: 16px 18px; margin: 18px 0;
+  }
+  .rilievo p:last-child { margin-bottom: 0; }
+  code, .mono { font-family: var(--mono); font-size: 13px; color: var(--acc); }
+  a { color: var(--acc); }
+  .servizi { font-family: var(--mono); font-size: 12px; color: var(--tenue); }
+  .servizi div { padding: 5px 0; border-bottom: 1px dashed var(--bordo); }
+  .servizi div:last-child { border-bottom: none; }
+  .servizi b { color: var(--testo); font-weight: 400; display: inline-block; min-width: 190px; }
+  footer {
+    margin-top: 46px; padding-top: 20px; border-top: 1px solid var(--bordo);
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--tenue);
+  }
+  @media (max-width: 560px) {
+    body { padding: 26px 16px 60px; }
+    h1 { font-size: 24px; }
+    .servizi b { display: block; min-width: 0; color: var(--testo); }
+  }
+</style>
+</head>
+<body>
+<div class="foglio">
+
+  <a class="torna" href="./">← TORNA A UNDR</a>
+
+  <h1>Privacy e segnalazioni</h1>
+  <div class="sotto">ULTIMO AGGIORNAMENTO · 2 SETTEMBRE 2026</div>
+
+  <p>UNDR è una radio pirata fatta in casa: si apre una crew, si condivide un codice, e chi
+  entra ascolta la stessa musica. Non c'è iscrizione, non c'è profilazione, non c'è pubblicità.</p>
+
+  <p>Questa pagina dice <strong>esattamente</strong> cosa succede ai dati, comprese le cose
+  scomode. Non è un documento scritto per proteggerci: è scritto perché tu sappia dove ti trovi.</p>
+
+  <h2>LA COSA PIÙ IMPORTANTE</h2>
+
+  <div class="rilievo">
+    <p><strong>Entrando in una crew, il tuo indirizzo IP diventa visibile agli altri membri.</strong></p>
+    <p class="tenue">UNDR collega i dispositivi direttamente fra loro, senza passare da un server
+    centrale. È il motivo per cui funziona senza costi e senza registri — ma un collegamento
+    diretto, per esistere, ha bisogno degli indirizzi di tutti e due i capi. Chi è nella tua crew
+    può quindi risalire alla tua zona geografica approssimativa e al tuo operatore.</p>
+    <p class="tenue">Con gli amici è normale. <strong>Con sconosciuti, usa una VPN.</strong></p>
+  </div>
+
+  <h2>NESSUN ACCOUNT</h2>
+
+  <p>Non chiediamo email, numero di telefono, nome vero o password personale. Non esiste
+  un profilo utente da nessuna parte. L'alias e la foto che scegli restano <strong>sul tuo
+  telefono</strong>, e vengono mostrati solo ai membri della crew in cui entri.</p>
+
+  <h2>COSA VEDONO GLI ALTRI MEMBRI DELLA CREW</h2>
+
+  <p>Attraverso il collegamento diretto, agli altri membri arrivano:</p>
+  <ul>
+    <li>il tuo <strong>alias</strong> e la <strong>foto</strong> che hai scelto</li>
+    <li>i <strong>messaggi</strong> che scrivi in chat</li>
+    <li>le <strong>tracce</strong> che aggiungi e i <strong>voti</strong> che dai</li>
+    <li>il tuo <strong>indirizzo IP</strong>, per quanto detto sopra</li>
+  </ul>
+  <p class="tenue">I messaggi non passano da nessun nostro server e non vengono salvati da
+  nessuna parte: vivono finché la finestra resta aperta.</p>
+
+  <h2>COSA FINISCE SUL NOSTRO CLOUD</h2>
+
+  <p>Per far sopravvivere una crew quando nessuno è collegato, salviamo la coda su un database
+  (Supabase, server in Irlanda). Ci finisce:</p>
+  <ul>
+    <li>il <strong>codice</strong> della crew</li>
+    <li>l'<strong>impronta</strong> della password della crew, mai la password in chiaro</li>
+    <li>la <strong>playlist</strong>: titoli, artisti, copertine, durate, numero di voti</li>
+  </ul>
+  <p><strong>Non</strong> ci finiscono: chi ha aggiunto cosa, chi ha votato cosa, i messaggi di
+  chat, gli alias, le foto. Vengono tolti apposta prima del salvataggio.</p>
+
+  <h2>COSA RESTA SUL TUO DISPOSITIVO</h2>
+
+  <ul>
+    <li>alias, foto profilo e lingua</li>
+    <li>le crew a cui hai partecipato, con la loro playlist</li>
+    <li>le durate dei brani e i nomi degli artisti già cercati, per non ripetere il lavoro</li>
+  </ul>
+  <p class="tenue">Si cancella tutto svuotando i dati del sito dal browser, o disinstallando
+  l'app.</p>
+
+  <h2>CHI ALTRO RICEVE QUALCOSA</h2>
+
+  <p>UNDR non ha server propri per la musica: usa servizi di terzi, che ricevono almeno il tuo
+  indirizzo IP nel momento in cui vengono contattati.</p>
+
+  <div class="servizi">
+    <div><b>YouTube / Google</b> riproduce i video. Usiamo la variante senza cookie, ma dal
+      momento in cui parte un video valgono le loro condizioni.</div>
+    <div><b>Vimeo</b> come sopra, per i video Vimeo.</div>
+    <div><b>PeerJS</b> mette in contatto i dispositivi fra loro. Non vede i contenuti.</div>
+    <div><b>Server STUN/TURN</b> servono a stabilire il collegamento quando le reti sono chiuse.</div>
+    <div><b>Supabase</b> ospita il database delle crew.</div>
+    <div><b>MusicBrainz</b> archivio musicale libero, per risalire all'artista vero di un brano.</div>
+    <div><b>noembed e istanze Invidious</b> per titolo, copertina e durata di un video.</div>
+    <div><b>Google Fonts e jsDelivr</b> forniscono caratteri e una libreria.</div>
+  </div>
+
+  <h2>MUSICA E DIRITTI D'AUTORE</h2>
+
+  <p>UNDR <strong>non ospita, non copia e non ritrasmette</strong> alcun contenuto musicale.
+  Quando qualcuno incolla un link, l'app mostra il <strong>lettore ufficiale</strong> di YouTube
+  o Vimeo: il video arriva da loro, con la loro pubblicità e conteggiando le loro
+  visualizzazioni. UNDR condivide solo un identificativo e un titolo, come farebbe un messaggio
+  con un link dentro.</p>
+
+  <p>I contenuti li scelgono gli utenti. Se ritieni che un contenuto raggiungibile tramite UNDR
+  violi un tuo diritto, <strong>scrivici</strong>: rimuoviamo il riferimento e, se serve,
+  blocchiamo la crew.</p>
+
+  <h2>SEGNALAZIONI E RIMOZIONI</h2>
+
+  <div class="rilievo">
+    <p class="mono">undr.crew@gmail.com</p>
+    <p class="tenue">Scrivi a questo indirizzo per: chiedere la rimozione di un contenuto,
+    segnalare un abuso, chiedere la cancellazione di una crew, o qualsiasi domanda su questa
+    pagina. Rispondiamo, e non serve un avvocato per farsi ascoltare.</p>
+  </div>
+
+  <p>Per una segnalazione di diritto d'autore, indica: il contenuto, il codice della crew se lo
+  conosci, e su quale base agisci. Ci basta questo.</p>
+
+  <h2>I TUOI DIRITTI</h2>
+
+  <p>Non avendo account, non abbiamo un archivio con dentro te: non c'è un profilo da esportare
+  o da cancellare. In concreto:</p>
+  <ul>
+    <li><strong>cancellare i tuoi dati:</strong> svuota i dati del sito o disinstalla l'app</li>
+    <li><strong>uscire da una crew:</strong> basta uscire, e il collegamento diretto sparisce</li>
+    <li><strong>cancellare una crew dal cloud:</strong> scrivici col codice, la togliamo</li>
+  </ul>
+  <p>Se ti trovi nell'Unione Europea, hai comunque diritto di chiedere accesso, rettifica e
+  cancellazione: l'indirizzo qui sopra è quello giusto.</p>
+
+  <h2>MINORI</h2>
+
+  <p>UNDR non è pensato per bambini e non raccoglie dati per profilare nessuno. Vista la
+  visibilità reciproca degli indirizzi fra i membri di una crew, sconsigliamo l'uso con
+  sconosciuti a chi ha meno di sedici anni.</p>
+
+  <h2>MODIFICHE</h2>
+
+  <p>Se cambierà qualcosa di sostanziale in come funziona l'app, questa pagina cambierà con
+  lei, e la data in alto lo dirà.</p>
+
+  <footer>
+    UNDR CREW · P2P · NESSUN ACCOUNT · NESSUN TRACCIAMENTO
+  </footer>
+
+</div>
+</body>
+</html>

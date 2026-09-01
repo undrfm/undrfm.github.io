@@ -2870,33 +2870,16 @@ async function requestWakeLock() {
   } catch(e) {}
 }
 
-// Silent audio trick — mantiene audio attivo su Android con schermo spento.
-// Buffer di SOLI ZERI in loop: silenzio assoluto, niente fischio
-// (il vecchio oscillatore a gain 0.001 era udibile come un sibilo continuo).
-let _silentAudio = null;
-function startSilentAudio() {
-  if (_silentAudio) return;
-  try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-    const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate); // 1s di zeri
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.loop = true;
-    const gainNode = ctx.createGain();
-    gainNode.gain.value = 0; // doppia sicurezza
-    src.connect(gainNode);
-    gainNode.connect(ctx.destination);
-    src.start();
-    _silentAudio = { ctx, oscillator: src };
-  } catch(e) {}
-}
-
+// IL TRUCCO DELL'AUDIO MUTO E' STATO TOLTO (02/09/2026).
+// Era un buffer di zeri in ripetizione che teneva viva la sessione audio per
+// far continuare la musica a schermo spento. Funzionava, ma la riproduzione
+// in sottofondo del lettore incorporato e' proprio cio' che i termini di
+// YouTube non consentono: e' la funzione che vendono con Premium.
+// Non serviva comunque: su Android l'app ha il suo sottofondo nativo, e
+// altrove non e' richiesto. NON RIMETTERLO.
 function startBackgroundAudio() {
-  requestWakeLock();
-  startSilentAudio();
-  setupMediaSession();
+  requestWakeLock();     // lo schermo non si spegne mentre guardi: legittimo
+  setupMediaSession();   // titolo e comandi nella schermata di blocco
 }
 
 function updateArtwork(thumbUrl) {} // removed
@@ -3976,7 +3959,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '02set-durata';
+var VERSIONE_UNDR = '02set-noBG';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;

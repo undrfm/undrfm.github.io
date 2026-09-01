@@ -14,17 +14,16 @@
     --sans: 'Space Grotesk', system-ui, sans-serif; --mono: 'Space Mono', monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* Niente barra di scorrimento a vista: la pagina si legge dentro una
+     finestra dell'app e quel rettangolino grigio stonava. Si scorre lo
+     stesso, col dito e con la rotella. */
+  html { scrollbar-width: none; -ms-overflow-style: none; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display: none; }
   body {
     background: var(--bg); color: var(--testo); font-family: var(--sans);
     line-height: 1.65; padding: 40px 20px 80px; -webkit-font-smoothing: antialiased;
   }
   .foglio { max-width: 720px; margin: 0 auto; }
-  .torna {
-    display: inline-block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
-    color: var(--tenue); text-decoration: none; border: 1px solid var(--bordo);
-    border-radius: 999px; padding: 7px 14px; margin-bottom: 28px;
-  }
-  .torna:hover { color: var(--acc); border-color: var(--acc); }
   h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 6px; }
   .sotto { font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; color: var(--acc); margin-bottom: 34px; }
   h2 {
@@ -75,18 +74,7 @@
 <body>
 <div class="foglio">
 
-  <!-- Il pulsante di ritorno serve solo a chi apre la pagina dal browser.
-       Dentro l'app la pagina e' mostrata in una finestra che ha gia' la sua X,
-       e questo pulsante porterebbe l'app dentro se stessa: quindi sparisce. -->
-  <a class="torna" href="./">← TORNA A UNDR</a>
-  <script>
-    try {
-      if (window.self !== window.top) {
-        document.querySelector('.torna').style.display = 'none';
-        document.body.style.paddingTop = '24px';
-      }
-    } catch (e) { /* incorniciata da un'altra origine: si lascia com'e' */ }
-  </script>
+
 
   <h1>Privacy e segnalazioni</h1>
   <div class="sotto">ULTIMO AGGIORNAMENTO · 2 SETTEMBRE 2026</div>

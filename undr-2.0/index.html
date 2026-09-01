@@ -2475,7 +2475,13 @@ function _ytOrigin() {
   if (!/^https?:\/\//i.test(o) || /(?:^|\/\/)(?:localhost|127\.0\.0\.1)|tauri/i.test(o)) return 'http://localhost';
   return o;
 }
-var _ytChannelOk = false;   // vero se il player risponde via postMessage (solo con origin reale: sito/PWA)
+// Vero quando il player risponde via postMessage.
+// NOTA (02/09/2026): qui c'era scritto "solo con origin reale: sito/PWA", ed
+// era SBAGLIATO. Verificato sul telefono col pannello di diagnosi, sull'APK
+// del 23 agosto: canale player = true, e i messaggi da YouTube arrivano.
+// Il canale funziona anche dentro l'APK, quindi la durata arriva da sola
+// ovunque. Quella frase ci aveva convinti che servisse un ripiego esterno.
+var _ytChannelOk = false;
 var _lastYtMsgAt = 0;       // timestamp dell'ultimo messaggio ricevuto dal player
 var _ytSwapCheckTimer = null;
 
@@ -3922,7 +3928,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '02set-pulizia';
+var VERSIONE_UNDR = '02set-pulizia2';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;

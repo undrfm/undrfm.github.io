@@ -2979,6 +2979,19 @@ window.addEventListener('message', (e) => {
       const cur = queue[currentIdx];
       if (cur) {
         savelearnedDuration(cur.source || 'youtube', cur.videoId, data.info.duration);
+        // La durata la sa SOLO il lettore ufficiale, e solo dove il canale
+        // risponde: sito e PWA. Dentro l'APK l'indirizzo di partenza e' finto
+        // (http://localhost), il canale non parla e la durata li' non arriva
+        // mai — per questo serviva Invidious.
+        // Salvandola solo nella memoria di QUESTO telefono non serviva a
+        // nessun altro. Attaccandola invece alla traccia, viaggia con la coda:
+        // finisce nel cloud e chi entra dopo se la ritrova gia' pronta, APK
+        // compreso. Invidious resta come ripiego immediato, ma serve sempre meno.
+        var _dur = Math.round(data.info.duration);
+        if (_dur > 5 && (!cur.duration || cur.duration < 5)) {
+          cur.duration = _dur;
+          try { _salvaCorrezioni(); } catch (e) {}   // nel cloud scrive solo chi ha creato la crew
+        }
         // Riavvia watchdog con duration reale (ma MAI durante una pausa)
         if (_progressRunning) _setupAutoNextWatchdog();
       }
@@ -3963,7 +3976,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '23ago-tasti';
+var VERSIONE_UNDR = '02set-durata';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;

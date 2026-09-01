@@ -3928,7 +3928,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '02set-pulizia2';
+var VERSIONE_UNDR = '02set-profilo';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -7145,14 +7145,6 @@ body.tv-orizz #sfondo-tela { display: none !important; }
       <div id="acc-privacy-join" class="accordion-body">
         <p class="ip-text">IL TUO IP È VISIBILE · USA UNA <span style="color:var(--accent);">VPN</span> CON SCONOSCIUTI</p>
 
-        <!-- Rimando all'informativa completa. Nessun testo nuovo da tradurre:
-             la parola PRIVACY e l'indirizzo valgono in tutte le lingue, e i
-             contenuti (compresa la mail per le rimozioni) stanno in una pagina
-             sola, che si aggiorna senza toccare l'app. -->
-        <a class="link-privacy" href="https://undrfm.github.io/undr-2.0/privacy.html"
-           target="_blank" rel="noopener noreferrer">
-          PRIVACY<span>undrfm.github.io/undr-2.0/privacy</span>
-        </a>
       </div>
     </div>
 
@@ -7197,6 +7189,20 @@ body.tv-orizz #sfondo-tela { display: none !important; }
 #fm-band-card p { margin: 0 0 6px; font-size: 12px; color: #999; }
 #fm-band-card a { color: var(--accent); }
 
+/* ── PRIVACY NEL PROFILO, SOTTO LE STATISTICHE ────────────────── */
+.acc-privacy {
+  display: block; text-align: center; text-decoration: none;
+  margin: 14px 0 4px; padding: 11px 12px;
+  border: 1px solid rgba(255,255,255,0.16); border-radius: 14px;
+  background: rgba(255,255,255,0.035);
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em;
+  color: var(--muted2);
+}
+.acc-privacy span {
+  display: block; margin-top: 4px; font-size: 9px;
+  letter-spacing: 0.04em; color: var(--muted); opacity: 0.8;
+}
+.acc-privacy:active { border-color: var(--accent-alone2, rgba(200,245,58,0.35)); color: var(--accent); }
 /* ── RIMANDO ALL'INFORMATIVA ──────────────────────────────── */
 .link-privacy {
   display: block; text-align: center; text-decoration: none;
@@ -7642,6 +7648,16 @@ html.melo #tab-player:not(.active) #yt-player-div {
       <div class="acc-stat"><div class="acc-stat-n" id="acc-online">0h</div><div class="acc-stat-l">ONLINE</div></div>
       <div class="acc-stat"><div class="acc-stat-n" id="acc-stash">0</div><div class="acc-stat-l">STASH</div></div>
     </div>
+
+    <!-- Informativa e contatto per le segnalazioni. Qui e non nel corpo della
+         pagina: il testo sta in un solo posto, sul sito, e si aggiorna senza
+         ricompilare l'APK. La parola PRIVACY e l'indirizzo valgono in tutte
+         e undici le lingue, quindi non c'e' niente da tradurre. -->
+    <a class="acc-privacy" href="https://undrfm.github.io/undr-2.0/privacy.html"
+       target="_blank" rel="noopener noreferrer">
+      PRIVACY E SEGNALAZIONI
+      <span>undrfm.github.io/undr-2.0/privacy</span>
+    </a>
     <button class="acc-shop-btn" id="acc-btn-shop" onclick="closeAccount(); openShop();">◆ APRI LO SHOP — colori e badge</button>
     <button class="acc-shop-btn" style="border-color:rgba(255,77,77,0.4);color:rgba(255,77,77,0.75);" onclick="leaveCrewForGood()">⏏ CAMBIA CREW</button>
   </div>

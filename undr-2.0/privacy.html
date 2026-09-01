@@ -75,7 +75,18 @@
 <body>
 <div class="foglio">
 
+  <!-- Il pulsante di ritorno serve solo a chi apre la pagina dal browser.
+       Dentro l'app la pagina e' mostrata in una finestra che ha gia' la sua X,
+       e questo pulsante porterebbe l'app dentro se stessa: quindi sparisce. -->
   <a class="torna" href="./">← TORNA A UNDR</a>
+  <script>
+    try {
+      if (window.self !== window.top) {
+        document.querySelector('.torna').style.display = 'none';
+        document.body.style.paddingTop = '24px';
+      }
+    } catch (e) { /* incorniciata da un'altra origine: si lascia com'e' */ }
+  </script>
 
   <h1>Privacy e segnalazioni</h1>
   <div class="sotto">ULTIMO AGGIORNAMENTO · 2 SETTEMBRE 2026</div>

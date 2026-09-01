@@ -12,7 +12,7 @@
 <meta name="msapplication-tap-highlight" content="no">
 <link rel="manifest" id="pwa-manifest">
 <link rel="apple-touch-icon" id="apple-icon">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://localhost tauri://localhost capacitor://localhost; script-src 'self' 'unsafe-inline' blob: https://cdn.jsdelivr.net https://www.youtube.com https://s.ytimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com https://i.vimeocdn.com; frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; media-src 'self' blob: data:; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; connect-src 'self' blob: https://localhost https://cebssqzlzvekytgzrqju.supabase.co https://soyvmntqgpydansubrdw.supabase.co https://noembed.com https://musicbrainz.org https://www.youtube.com wss://0.peerjs.com https://0.peerjs.com">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://localhost tauri://localhost capacitor://localhost; script-src 'self' 'unsafe-inline' blob: https://cdn.jsdelivr.net https://www.youtube.com https://s.ytimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com https://i.vimeocdn.com; frame-src 'self' https://undrfm.github.io https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; media-src 'self' blob: data:; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; connect-src 'self' blob: https://localhost https://cebssqzlzvekytgzrqju.supabase.co https://soyvmntqgpydansubrdw.supabase.co https://noembed.com https://musicbrainz.org https://www.youtube.com wss://0.peerjs.com https://0.peerjs.com">
 <title>UNDR</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap');
@@ -3928,7 +3928,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '02set-profilo';
+var VERSIONE_UNDR = '02set-informativa';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -4100,6 +4100,39 @@ function _syncCrtOff() {
     document.body.classList.toggle('crt-off', !!(inRoom && (tabQ || tabP)));
   } catch(e) {}
 }
+
+// ═════ INFORMATIVA PRIVACY ═════════════════════════════════
+// Si apre dentro l'app, non nel browser. Aprendola si aggiunge una tappa
+// nella cronologia: cosi' il tasto indietro del telefono chiude QUESTA
+// finestra invece di uscire dall'app, e sotto ritrovi il profilo aperto
+// esattamente com'era. La pagina si carica solo la prima volta.
+function apriInformativa() {
+  var o = document.getElementById('privacy-overlay');
+  var f = document.getElementById('privacy-frame');
+  if (!o || !f) return;
+  if (!f.getAttribute('data-caricata')) {
+    f.src = 'https://undrfm.github.io/undr-2.0/privacy.html';
+    f.setAttribute('data-caricata', '1');
+  }
+  o.classList.add('aperto');
+  try { history.pushState({ undrPrivacy: 1 }, ''); } catch (e) {}
+}
+
+function chiudiInformativa(daIndietro) {
+  var o = document.getElementById('privacy-overlay');
+  if (!o || !o.classList.contains('aperto')) return;
+  o.classList.remove('aperto');
+  // Se sto chiudendo con la X, tolgo anche la tappa che avevo aggiunto:
+  // altrimenti resterebbe li' e il tasto indietro non farebbe niente.
+  if (!daIndietro) {
+    try { if (history.state && history.state.undrPrivacy) history.back(); } catch (e) {}
+  }
+}
+
+window.addEventListener('popstate', function () {
+  var o = document.getElementById('privacy-overlay');
+  if (o && o.classList.contains('aperto')) chiudiInformativa(true);
+});
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -7189,9 +7222,31 @@ body.tv-orizz #sfondo-tela { display: none !important; }
 #fm-band-card p { margin: 0 0 6px; font-size: 12px; color: #999; }
 #fm-band-card a { color: var(--accent); }
 
+/* ── LA FINESTRA DELL'INFORMATIVA ─────────────────────────── */
+#privacy-overlay {
+  position: fixed; inset: 0; z-index: 13500;
+  display: none; flex-direction: column; background: #07060a;
+}
+#privacy-overlay.aperto { display: flex; }
+#privacy-overlay .pv-barra {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: calc(11px + var(--safe-top, 0px)) 14px 11px;
+  border-bottom: 1px solid rgba(255,255,255,0.14);
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em;
+  color: var(--accent); flex-shrink: 0;
+}
+#privacy-overlay .pv-chiudi {
+  background: transparent; border: 1px solid rgba(255,255,255,0.22);
+  border-radius: 999px; width: 34px; height: 34px; flex-shrink: 0;
+  color: var(--muted); font-size: 14px; line-height: 1; cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+#privacy-overlay .pv-chiudi:active { color: var(--accent); border-color: var(--accent); }
+#privacy-frame { flex: 1; width: 100%; border: 0; background: #07060a; }
 /* ── PRIVACY NEL PROFILO, SOTTO LE STATISTICHE ────────────────── */
 .acc-privacy {
-  display: block; text-align: center; text-decoration: none;
+  display: block; width: 100%; text-align: center; text-decoration: none;
+  cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
   margin: 14px 0 4px; padding: 11px 12px;
   border: 1px solid rgba(255,255,255,0.16); border-radius: 14px;
   background: rgba(255,255,255,0.035);
@@ -7653,14 +7708,23 @@ html.melo #tab-player:not(.active) #yt-player-div {
          pagina: il testo sta in un solo posto, sul sito, e si aggiorna senza
          ricompilare l'APK. La parola PRIVACY e l'indirizzo valgono in tutte
          e undici le lingue, quindi non c'e' niente da tradurre. -->
-    <a class="acc-privacy" href="https://undrfm.github.io/undr-2.0/privacy.html"
-       target="_blank" rel="noopener noreferrer">
-      PRIVACY E SEGNALAZIONI
-      <span>undrfm.github.io/undr-2.0/privacy</span>
-    </a>
+    <button type="button" class="acc-privacy" onclick="apriInformativa()">INFORMATIVA PRIVACY</button>
     <button class="acc-shop-btn" id="acc-btn-shop" onclick="closeAccount(); openShop();">◆ APRI LO SHOP — colori e badge</button>
     <button class="acc-shop-btn" style="border-color:rgba(255,77,77,0.4);color:rgba(255,77,77,0.75);" onclick="leaveCrewForGood()">⏏ CAMBIA CREW</button>
   </div>
+</div>
+
+<!-- L'informativa si apre DENTRO l'app, in un riquadro che copre lo schermo.
+     Prima si usciva verso il browser: tornando indietro l'app ripartiva da
+     capo e il profilo si chiudeva. Cosi' invece non si naviga da nessuna
+     parte, e il tasto indietro richiude soltanto questa finestra.
+     Il testo resta sul sito, quindi si aggiorna senza ricompilare l'APK. -->
+<div id="privacy-overlay">
+  <div class="pv-barra">
+    <span>INFORMATIVA PRIVACY</span>
+    <button type="button" class="pv-chiudi" onclick="chiudiInformativa()" aria-label="chiudi">✕</button>
+  </div>
+  <iframe id="privacy-frame" title="Informativa privacy" src="about:blank"></iframe>
 </div>
 
 <div id="now-playing-bar" style="display:none;"></div>

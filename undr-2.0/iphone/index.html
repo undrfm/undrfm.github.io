@@ -3928,7 +3928,7 @@ if (document.readyState === 'loading') {
 // "quale versione sta girando su questo telefono?": una PWA installata puo'
 // tenersi una copia vecchia in cache, e senza questo si finisce a cercare
 // difetti gia' corretti.
-var VERSIONE_UNDR = '02set-informativa2';
+var VERSIONE_UNDR = '02set-firefox';
 document.addEventListener('DOMContentLoaded', function () {
   var e = document.getElementById('segno-versione');
   if (e) e.textContent = VERSIONE_UNDR;
@@ -7228,11 +7228,18 @@ body.tv-orizz #sfondo-tela { display: none !important; }
 #fm-band-card a { color: var(--accent); }
 
 /* ── LA FINESTRA DELL'INFORMATIVA ─────────────────────────── */
+/* NON si nasconde con display:none. Firefox, quando un riquadro incorporato
+   finisce dentro un ramo display:none, lo SCARICA dalla memoria: riaprendo
+   doveva ricaricare tutto da capo e intanto si vedeva il bianco. Chrome lo
+   conserva, per questo il difetto si vedeva solo su Firefox da computer.
+   Cosi' invece resta impaginato e semplicemente non si vede ne' si tocca. */
 #privacy-overlay {
   position: fixed; inset: 0; z-index: 13500;
-  display: none; flex-direction: column; background: #07060a;
+  display: flex; flex-direction: column; background: #07060a;
+  visibility: hidden; opacity: 0; pointer-events: none;
+  transition: opacity 0.18s ease-out;
 }
-#privacy-overlay.aperto { display: flex; }
+#privacy-overlay.aperto { visibility: visible; opacity: 1; pointer-events: auto; }
 #privacy-overlay .pv-barra {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: calc(11px + var(--safe-top, 0px)) 14px 11px;

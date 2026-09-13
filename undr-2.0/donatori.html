@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UNDR — Chi tiene accesa la radio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07060a; --sup: rgba(255,255,255,0.045); --bordo: rgba(255,255,255,0.14);
+    --testo: #e9e4f2; --tenue: #a49bbd; --acc: #c8f53a;
+    --sans: 'Space Grotesk', system-ui, sans-serif; --mono: 'Space Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* Niente barra di scorrimento a vista: la pagina si legge dentro una
+     finestra dell'app e quel rettangolino grigio stonava. */
+  html { scrollbar-width: none; -ms-overflow-style: none; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display: none; }
+  body {
+    background: var(--bg); color: var(--testo); font-family: var(--sans);
+    line-height: 1.65; padding: 40px 20px 80px; -webkit-font-smoothing: antialiased;
+  }
+  .foglio { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 6px; }
+  .sotto { font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; color: var(--acc); margin-bottom: 34px; }
+  h2 {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.18em; color: var(--acc);
+    margin: 36px 0 12px; padding-top: 20px; border-top: 1px solid var(--bordo);
+  }
+  p { margin-bottom: 14px; color: var(--testo); }
+  .tenue { color: var(--tenue); }
+  strong { color: #fff; font-weight: 600; }
+  .rilievo {
+    background: var(--sup); border: 1px solid var(--bordo); border-left: 2px solid var(--acc);
+    border-radius: 10px; padding: 16px 18px; margin: 18px 0;
+  }
+  .rilievo p:last-child { margin-bottom: 0; }
+  code, .mono { font-family: var(--mono); font-size: 13px; color: var(--acc); }
+  a { color: var(--acc); }
+
+  /* ── I NOMI ──
+     Un nome per riquadro, in fila. Si aggiunge una riga e basta: niente
+     tabelle, niente numeri d'ordine, nessuna classifica. Chi ha dato 3 euro
+     sta accanto a chi ne ha dati 50, ed e' voluto. */
+  .nomi {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 6px;
+  }
+  .nomi div {
+    font-family: var(--mono); font-size: 13px; color: var(--testo);
+    background: var(--sup); border: 1px solid var(--bordo);
+    border-radius: 999px; padding: 7px 15px;
+  }
+  .vuoto {
+    font-family: var(--mono); font-size: 12px; color: var(--tenue);
+    border: 1px dashed var(--bordo); border-radius: 10px;
+    padding: 18px; text-align: center; margin: 18px 0 6px;
+  }
+  footer {
+    margin-top: 46px; padding-top: 20px; border-top: 1px solid var(--bordo);
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--tenue);
+  }
+  @media (max-width: 560px) {
+    body { padding: 26px 16px 60px; }
+    h1 { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="foglio">
+
+  <h1>Chi tiene accesa la radio</h1>
+  <div class="sotto">AGGIORNATO · 13 SETTEMBRE 2026</div>
+
+  <p>UNDR è gratis. Non ha pubblicità, non ha abbonamenti, non vende niente e non profila
+  nessuno — e non è una promessa da pagina di marketing: è scritto nell'<a href="privacy.html">informativa</a>,
+  con tutte le cose scomode dentro.</p>
+
+  <p>Quello che costa davvero è tenere in piedi i pezzi che fanno funzionare le crew quando
+  nessuno è collegato. Lo paga <strong>chi vuole, quando vuole</strong>. Chi non vuole usa
+  l'app esattamente come gli altri: <strong>una donazione non sblocca niente.</strong> Nessuna
+  traccia in più, nessun canale riservato, nessun vantaggio dentro l'app. Chi dona non
+  compra un servizio migliore: tiene accesa una radio anche per chi non può pagarla.</p>
+
+  <h2>I NOMI</h2>
+
+  <p class="tenue">Sono i nomi che hanno scelto loro, scritti da loro nel momento della
+  donazione. Niente cifre accanto: qui non c'è una classifica.</p>
+
+  <!-- ── ELENCO ──
+       Per aggiungere qualcuno: una riga <div>nick</div> qui sotto, e si toglie
+       il blocco .vuoto quando entra il primo. Ordine di arrivo, dal primo. -->
+  <div class="vuoto">
+    ancora nessuno — se sei il primo, il tuo nome apre questa lista
+  </div>
+
+  <h2>COME SI FA</h2>
+
+  <p>Si sostiene <strong>dal profilo dell'app</strong>, sotto le statistiche. Il pagamento si
+  apre fuori dall'app, su una pagina sicura: UNDR non vede e non conserva nessun dato della
+  tua carta, mai.</p>
+
+  <div class="rilievo">
+    <p><strong>Da 3 € in su, e c'è un motivo pratico.</strong></p>
+    <p class="tenue">Chi elabora i pagamenti trattiene una percentuale più una quota fissa di
+    circa 25 centesimi, e quella quota non cambia con l'importo. Su una donazione da 1 € se ne
+    andrebbe in commissioni più di un quarto: non ha senso per nessuno dei due. Da 3 € in su il
+    conto torna.</p>
+  </div>
+
+  <p class="tenue">Il nome che scrivi durante la donazione è quello che finisce su questa
+  pagina. <strong>Se non scrivi niente, non compare niente:</strong> si può sostenere UNDR
+  restando invisibili, ed è perfettamente legittimo.</p>
+
+  <h2>RIPENSAMENTI</h2>
+
+  <p>Se hai donato e non vuoi più il tuo nome qui, o lo vuoi scritto diversamente, scrivi a
+  <span class="mono">undr.crew@gmail.com</span> e lo sistemiamo. Non serve una spiegazione.</p>
+
+  <footer>
+    UNDR CREW · P2P · NESSUN ACCOUNT · NESSUN TRACCIAMENTO
+  </footer>
+
+</div>
+</body>
+</html>
